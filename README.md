@@ -1,3 +1,3 @@
 # Poster Boy
 
-Web de Poster Boy, dúo de dream pop.
+Web de Poster Boy
