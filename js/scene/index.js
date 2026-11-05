@@ -1,0 +1,91 @@
+// Monta la escena de Mazarrón: renderizador, cámara, luces y bucle de animación.
+import * as THREE from 'three';
+import { FOG_COLOR, FOG_NEAR, FOG_FAR } from './util.js';
+import { createSky } from './sky.js';
+import { createSea } from './sea.js';
+import { createBay } from './bay.js';
+import { createBeach } from './beach.js';
+import { createProps } from './props.js';
+import { createCharacters } from './characters.js';
+
+THREE.ColorManagement.enabled = false;   // colores "tal cual"
+
+const RENDER_HEIGHT = 480;   // resolución interna: más bajo = más "de época"
+
+export function createScene(canvas, { reducedMotion = false } = {}) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  renderer.setPixelRatio(1);
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR);
+
+  const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.05, 4000);
+  const CAM = new THREE.Vector3(0.25, 1.95, 3.3);
+  const LOOK = new THREE.Vector3(-0.3, 0.9, -10);
+
+  // luz ambiente de atardecer: cielo lila, suelo cálido
+  scene.add(new THREE.HemisphereLight('#8f7cc4', '#3a2420', 0.9));
+  // contraluz del sol ya puesto (desde el horizonte, a la izquierda)
+  const rim = new THREE.DirectionalLight('#ff9a70', 0.9);
+  rim.position.set(-250, 30, -500);
+  scene.add(rim);
+  // relleno suave desde detrás de la cámara, para que se os lea de espaldas
+  const fill = new THREE.DirectionalLight('#b897d6', 0.55);
+  fill.position.set(2, 4, 10);
+  scene.add(fill);
+
+  const parts = [createSky(), createSea(), createBay(), createBeach(), createProps(), createCharacters()];
+  parts.forEach(p => scene.add(p.object));
+
+  // mirar un poco con el ratón
+  const pointer = { x: 0, y: 0, sx: 0, sy: 0 };
+  window.addEventListener('pointermove', e => {
+    pointer.x = (e.clientX / innerWidth) * 2 - 1;
+    pointer.y = (e.clientY / innerHeight) * 2 - 1;
+  });
+
+  let camBack = 0;
+  function resize() {
+    const w = innerWidth, h = innerHeight;
+    const scale = Math.min(1, RENDER_HEIGHT / h);
+    renderer.setSize(Math.round(w * scale), Math.round(h * scale), false);
+    camera.aspect = w / h;
+    const portrait = w / h < 1;
+    camera.fov = portrait ? 66 : 50;   // en móvil, más angular y algo más lejos para que quepa todo
+    camBack = portrait ? 2.4 : 0;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const clock = new THREE.Clock();
+  const look = new THREE.Vector3();
+  let t = 0;
+
+  function frame() {
+    const dt = Math.min(clock.getDelta(), 0.05);
+    t += dt;
+    const k = reducedMotion ? 0 : 1;
+
+    pointer.sx += (pointer.x - pointer.sx) * Math.min(1, dt * 1.5);
+    pointer.sy += (pointer.y - pointer.sy) * Math.min(1, dt * 1.5);
+    camera.position.set(
+      CAM.x + Math.sin(t * 0.13) * 0.12 * k + pointer.sx * 0.15,
+      CAM.y + camBack * 0.35 + Math.sin(t * 0.21) * 0.05 * k - pointer.sy * 0.08,
+      CAM.z + camBack + Math.sin(t * 0.09) * 0.1 * k,
+    );
+    look.set(LOOK.x + pointer.sx * 1.6, LOOK.y - pointer.sy * 0.8, LOOK.z);
+    camera.lookAt(look);
+
+    for (const p of parts) p.update(t, camera, dt);
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  return {
+    /** Ilumina un elemento de la escena: 'town' | 'lamp' | 'island' | null */
+    setFocus(key) { parts.forEach(p => p.setFocus && p.setFocus(key)); },
+  };
+}

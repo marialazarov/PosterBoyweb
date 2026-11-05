@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Poster Boy</title>
+  <meta name="description" content="Poster Boy — dream pop.">
+  <meta name="theme-color" content="#1c1230">
+  <link rel="icon" href="data:,">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Questrial&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body data-state="intro">
+
+  <!-- Escena 3D: playa de Mazarrón al atardecer -->
+  <canvas id="scene" aria-hidden="true"></canvas>
+
+  <main id="ui">
+    <header class="logo">
+      <!-- Provisional: se sustituirá por el archivo del logo (SVG/PNG) -->
+      <h1 class="logo__text">Poster Boy</h1>
+    </header>
+
+    <p class="press">pulsa cualquier tecla</p>
+
+    <nav class="menu" aria-label="Menú principal">
+      <ul>
+        <li><button type="button" data-section="conciertos" data-focus="town"><span class="menu__n">01</span>conciertos</button></li>
+        <li><button type="button" data-section="album" data-focus="lamp"><span class="menu__n">02</span>álbum</button></li>
+        <li><button type="button" data-section="mapa" data-focus="island"><span class="menu__n">03</span>mapa</button></li>
+      </ul>
+    </nav>
+
+    <p class="hints" aria-hidden="true">
+      <span>↑↓ elegir</span><span>enter aceptar</span><span>m sonido</span>
+    </p>
+  </main>
+
+  <section class="panel" id="panel" hidden role="dialog" aria-modal="true" aria-labelledby="panel-title">
+    <div class="panel__window">
+      <header class="panel__head">
+        <span class="panel__tag" id="panel-tag">01</span>
+        <h2 class="panel__title" id="panel-title"></h2>
+      </header>
+      <div class="panel__body" id="panel-body"></div>
+      <footer class="panel__foot">
+        <button type="button" class="panel__back" id="panel-back">← volver <kbd>esc</kbd></button>
+      </footer>
+    </div>
+  </section>
+
+  <canvas id="grain" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
