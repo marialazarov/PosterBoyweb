@@ -70,37 +70,22 @@ const camo = () => {
   return t;
 };
 
-// piel con tatuajes de línea fina (como los de María)
-const tattooArm = () => canvasTexture(128, 128, (g, w, h) => {
+// antebrazo de María: la mancha sombreada (blackwork punteado) a media altura
+const blotArm = () => canvasTexture(128, 128, (g, w, h) => {
   const R = rand(9);
   g.fillStyle = SKIN; g.fillRect(0, 0, w, h);
-  g.strokeStyle = 'rgba(40,28,36,.75)'; g.fillStyle = 'rgba(40,28,36,.75)'; g.lineWidth = 1.4;
-  const heart = (x, y, s) => {
-    g.beginPath(); g.moveTo(x, y + s);
-    g.bezierCurveTo(x - s * 1.4, y, x - s * 0.8, y - s, x, y - s * 0.3);
-    g.bezierCurveTo(x + s * 0.8, y - s, x + s * 1.4, y, x, y + s); g.stroke();
-  };
-  // (la textura se usa en brazo y antebrazo; v=1 arriba = hombro / codo)
-  // dibujo de flor-insecto en lo alto del brazo, por fuera
-  g.lineWidth = 1.6;
-  g.save(); g.translate(30, 22);
-  for (let i = 0; i < 5; i++) { g.beginPath(); g.ellipse(0, 0, 9, 3.5, i * Math.PI / 5, 0, Math.PI * 2); g.stroke(); }
-  g.beginPath(); g.arc(0, 0, 3, 0, Math.PI * 2); g.fill();
-  g.beginPath(); g.moveTo(-14, 6); g.quadraticCurveTo(-4, 14, 12, 10); g.stroke();
-  g.beginPath(); g.moveTo(10, -10); g.lineTo(18, -16); g.moveTo(12, -6); g.lineTo(20, -8); g.stroke();
+  // v = 0 abajo (codo) → 1 arriba (muñeca): la mancha va hacia la muñeca, por fuera
+  const cx = w * 0.5, cy = h * 0.32;
+  const blot = g.createRadialGradient(cx, cy, 2, cx, cy, 34);
+  blot.addColorStop(0, 'rgba(48,54,66,.85)'); blot.addColorStop(0.6, 'rgba(48,54,66,.5)'); blot.addColorStop(1, 'rgba(48,54,66,0)');
+  g.save(); g.translate(cx, cy); g.scale(1.6, 0.8); g.translate(-cx, -cy);
+  g.fillStyle = blot; g.fillRect(cx - 40, cy - 40, 80, 80);
   g.restore();
-  heart(32, 66, 6);                                       // corazón pequeño
-  // mancha sombreada (blackwork) en el antebrazo
-  const blot = g.createRadialGradient(86, 96, 2, 86, 96, 16);
-  blot.addColorStop(0, 'rgba(45,50,60,.75)'); blot.addColorStop(1, 'rgba(45,50,60,0)');
-  g.fillStyle = blot; g.fillRect(66, 76, 40, 40);
-  g.fillStyle = 'rgba(40,28,36,.75)';
-  for (let i = 0; i < 40; i++) { g.beginPath(); g.arc(78 + R() * 18, 88 + R() * 16, 0.8, 0, Math.PI * 2); g.fill(); }
-  // símbolos pequeños por dentro
-  g.beginPath(); g.arc(100, 40, 4, 0, Math.PI * 2); g.moveTo(100, 44); g.lineTo(100, 52); g.moveTo(96, 48); g.lineTo(104, 48); g.stroke();
-  g.beginPath(); g.moveTo(110, 66); g.lineTo(116, 60); g.lineTo(122, 66); g.lineTo(116, 72); g.closePath(); g.stroke();
-  g.beginPath(); g.moveTo(56, 112); g.lineTo(62, 104); g.lineTo(68, 112); g.stroke();
-  for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(10 + R() * 110, 10 + R() * 100, 1.2, 0, Math.PI * 2); g.fill(); }
+  g.fillStyle = 'rgba(36,40,50,.8)';
+  for (let i = 0; i < 260; i++) {
+    const a = R() * Math.PI * 2, r = Math.pow(R(), 0.7) * 30;
+    g.beginPath(); g.arc(cx + Math.cos(a) * r * 1.6, cy + Math.sin(a) * r * 0.75, 0.6 + R() * 0.8, 0, Math.PI * 2); g.fill();
+  }
 });
 
 // camiseta de tirantes blanca (María). Lathe: u da la vuelta (0,5 = delante), v sube.
@@ -324,7 +309,7 @@ function hand(mat) {
 }
 
 // ── Cuerpo articulado (mirando hacia -z) ──
-function riggedBody({ top, sleeves, armMat, thighs, shins, shoes, armsCrossed, face, bust = 0.012, legR = [0.07, 0.05, 0.045, 0.036] }) {
+function riggedBody({ top, sleeves, armMat, foreMats, thighs, shins, shoes, armsCrossed, face, bust = 0.012, legR = [0.07, 0.05, 0.045, 0.036] }) {
   const body = new THREE.Group();     // en el suelo
   const upper = new THREE.Group();    // tronco, cuello y cabeza: sube al levantarse
   body.add(upper);
@@ -370,7 +355,7 @@ function riggedBody({ top, sleeves, armMat, thighs, shins, shoes, armsCrossed, f
     return { sx, thigh, shin, knee, shoe };
   });
   const armsList = [-1, 1].map(sx => {
-    const up = bone(0.038, 0.029, 0.26, armMat, 0.006, 0.4), fore = bone(0.03, 0.021, 0.235, armMat, 0.005, 0.25);
+    const up = bone(0.038, 0.029, 0.26, armMat, 0.006, 0.4), fore = bone(0.03, 0.021, 0.235, (foreMats && foreMats[sx]) || armMat, 0.005, 0.25);
     const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.029, 12, 8), armMat);
     const h = hand(skin);
     const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.046, 14, 10), sleeves || armMat);
@@ -551,7 +536,7 @@ function makeMaria() {
   const pants = lam('#ffffff', { map: camo() });
   pants.color.setRGB(1.0, 0.97, 0.94);   // que el camuflaje se lea con la luz del atardecer
   const rig = riggedBody({
-    top: phong('#ffffff', { map: tankTex() }), armMat: phong('#ffffff', { map: tattooArm() }),
+    top: phong('#ffffff', { map: tankTex() }), armMat: phong(SKIN), foreMats: { 1: phong('#ffffff', { map: blotArm() }) },
     thighs: pants, shins: pants, armsCrossed: true, bust: 0.01,
     shoes: () => sneaker(lam('#4a3024'), '#3a2a20'),
     face: { brows: '#1e130e', lips: '#b3272f', iris: '#3e2618', lashes: 5 },
