@@ -1,15 +1,14 @@
 /* ───────────────────────── Poster Boy ───────────────────────── */
 
 :root {
-  --ink: #fff8f2;
+  --ink: #fffbf0;                       /* el crema del logo */
   --ink-soft: rgba(255, 244, 236, 0.6);
   --warm: #ffc483;
   --lilac: #cbb2ff;
   --night: #1c1230;
-  --pink: #f7a8c2;
-  --rose: #b8466c;
-  --serif: "Bodoni Moda", "Didot", Georgia, serif;
-  --script: "Yellowtail", cursive;
+  /* Futura, la del logo (viene en Mac e iPhone). Donde no está, Jost, su gemela libre. */
+  --font: "Futura", "Futura PT", "Jost", system-ui, sans-serif;
+  --lift: 0 1px 2px rgba(30, 14, 40, .45), 0 0 14px rgba(30, 14, 40, .35);
   --glow: 0 0 18px rgba(255, 196, 131, .55), 0 0 2px rgba(30, 14, 40, .7);
   --ease: cubic-bezier(.2, .8, .2, 1);
 }
@@ -21,7 +20,7 @@ html, body {
   overflow: hidden;
   background: var(--night);
   color: var(--ink);
-  font-family: var(--serif);
+  font-family: var(--font);
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
@@ -40,17 +39,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #ui { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
 #ui > * { pointer-events: auto; }
 
-#grain {
-  position: fixed; inset: 0; z-index: 20; pointer-events: none;
-  width: 100%; height: 100%;
-  opacity: .08;
-  mix-blend-mode: overlay;
-}
-
 .vignette {
   position: fixed; inset: 0; z-index: 21; pointer-events: none;
   background:
-    repeating-linear-gradient(0deg, rgba(0,0,0,.04) 0 1px, transparent 1px 3px),
     radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(14,6,20,.6) 100%);
 }
 
@@ -85,11 +76,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   position: absolute;
   bottom: 5vh; left: 0; right: 0;
   text-align: center;
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: clamp(22px, 2.2vw, 30px);
-  letter-spacing: .12em;
-  text-shadow: var(--glow);
+  font-family: var(--font);
+  font-size: clamp(18px, 1.8vw, 24px);
+  letter-spacing: .3em;
+  text-transform: lowercase;
+  text-shadow: var(--lift);
   animation: breathe 2.6s ease-in-out infinite;
   pointer-events: none;
   transition: opacity .6s;
@@ -104,19 +95,19 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .menu {
   position: absolute;
   left: 0; right: 0;
-  top: 47vh;
+  top: 39vh;
   transition: opacity .9s var(--ease) .3s, transform .9s var(--ease) .3s;
 }
 .menu ul { list-style: none; display: grid; justify-items: center; gap: .1em; }
 
 .menu button {
   position: relative;
-  padding: .05em 1.1em .15em;
-  font-family: var(--script);
-  font-size: clamp(38px, 4.6vw, 64px);
-  line-height: 1.15;
-  color: rgba(255, 244, 236, .72);
-  text-shadow: 2px 2px 0 rgba(60, 24, 50, .55), 0 0 10px rgba(20, 10, 30, .6);
+  padding: .15em 1.4em;
+  font-size: clamp(24px, 2.6vw, 36px);
+  letter-spacing: .04em;
+  line-height: 1.2;
+  color: rgba(255, 251, 240, .78);
+  text-shadow: var(--lift);
   outline: none;
   transition: color .3s, transform .4s var(--ease), text-shadow .3s;
 }
@@ -126,8 +117,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   position: absolute;
   left: 0; top: 50%;
   translate: 0 -50%;
-  font-size: .55em;
-  color: var(--warm);
+  font-size: .5em;
+  color: var(--ink);
   opacity: 0;
   transition: opacity .2s;
   animation: spin 3.5s linear infinite;
@@ -135,10 +126,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .menu button::after { left: auto; right: 0; }
 @keyframes spin { to { rotate: 360deg; } }
 
-.menu button.is-active {             /* rosa con sombra desplazada, como el cartel */
-  color: var(--pink);
-  transform: scale(1.06);
-  text-shadow: 3px 3px 0 var(--rose), 0 0 22px rgba(255, 160, 190, .45);
+.menu button.is-active {
+  color: var(--ink);
+  transform: scale(1.04);
+  text-shadow: var(--lift), 0 0 24px rgba(255, 210, 170, .45);
 }
 .menu button.is-active::before,
 .menu button.is-active::after { opacity: 1; }
@@ -150,11 +141,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   bottom: max(2.4vh, env(safe-area-inset-bottom));
   left: 0; right: 0;
   display: flex; justify-content: center; gap: 2.2em;
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 16px;
-  letter-spacing: .08em;
-  color: rgba(255, 240, 230, .55);
+  font-family: var(--font);
+  font-size: 14px;
+  letter-spacing: .12em;
+  color: rgba(255, 251, 240, .6);
+  text-shadow: var(--lift);
   pointer-events: none;
   transition: opacity .8s;
 }
@@ -200,12 +191,12 @@ body[data-state="panel"] .hints { opacity: 0; pointer-events: none; }
 .panel.is-open .panel__window { transform: none; }
 
 .panel__head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
-.panel__tag { font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--warm); text-shadow: var(--glow); }
-.panel__title { font-family: var(--script); font-weight: 400; font-size: clamp(38px, 5.5vw, 58px); color: var(--pink); text-shadow: 3px 3px 0 var(--rose); }
+.panel__tag { font-size: 16px; color: var(--ink-soft); }
+.panel__title { font-weight: 400; font-size: clamp(30px, 4.2vw, 44px); letter-spacing: .01em; }
 
 .panel__body { font-size: 17px; line-height: 1.5; text-shadow: 0 1px 2px rgba(20,10,30,.6); }
 .panel__body .note {
-  font-family: var(--serif); font-style: italic; font-size: 17px; letter-spacing: .04em;
+  font-size: 15px; letter-spacing: .04em;
   color: var(--ink-soft);
   margin-bottom: 14px;
 }
@@ -218,8 +209,8 @@ body[data-state="panel"] .hints { opacity: 0; pointer-events: none; }
   background: rgba(255,255,255,.07);
   border: 1px solid rgba(255,255,255,.1);
 }
-.rows li span:first-child { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--ink); }
-.rows li span:last-child  { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-soft); }
+.rows li span:first-child { font-size: 16px; }
+.rows li span:last-child  { font-size: 15px; color: var(--ink-soft); }
 
 .chars { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .char {
@@ -238,7 +229,7 @@ body[data-state="panel"] .hints { opacity: 0; pointer-events: none; }
 
 .panel__foot { margin-top: 22px; display: flex; justify-content: flex-end; }
 .panel__back {
-  font-family: var(--serif); font-style: italic; font-size: 18px; letter-spacing: .06em;
+  font-size: 16px; letter-spacing: .04em;
   padding: 6px 14px; border-radius: 999px;
   outline: none;
   transition: background .2s, text-shadow .2s;

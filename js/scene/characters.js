@@ -14,7 +14,7 @@ const plaid = () => canvasTexture(32, 32, (g) => {
   g.fillStyle = '#6f7c4c'; g.fillRect(0, 0, 32, 32);
   g.fillStyle = 'rgba(48,58,32,.65)'; g.fillRect(0, 10, 32, 6); g.fillRect(10, 0, 6, 32);
   g.fillStyle = 'rgba(200,196,150,.45)'; g.fillRect(0, 24, 32, 1); g.fillRect(24, 0, 1, 32);
-}, { repeat: true, nearest: true });
+}, { repeat: true });
 
 const camo = () => canvasTexture(64, 64, (g) => {
   const R = rand(5);
@@ -27,7 +27,7 @@ const camo = () => canvasTexture(64, 64, (g) => {
       g.fill();
     }
   }
-}, { repeat: true, nearest: true });
+}, { repeat: true });
 
 const tattooedSkin = () => canvasTexture(32, 64, (g) => {
   const R = rand(9);
@@ -40,7 +40,7 @@ const tattooedSkin = () => canvasTexture(32, 64, (g) => {
     else { g.moveTo(x, y); g.lineTo(x + 3, y + 4); g.lineTo(x + 6, y); }
     g.stroke();
   }
-}, { nearest: true });
+}, {});
 
 // ── Cuerpo base sentado (mirando hacia -z) ──
 function seatedBody({ top, topSleeves, arms, thighs, shins, shoes, armsCrossed }) {

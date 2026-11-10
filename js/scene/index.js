@@ -10,12 +10,11 @@ import { createCharacters } from './characters.js';
 
 THREE.ColorManagement.enabled = false;   // colores "tal cual"
 
-const RENDER_HEIGHT = 480;   // resolución interna: más bajo = más "de época"
 
 export function createScene(canvas, { reducedMotion = false } = {}) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
-  renderer.setPixelRatio(1);
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR);
@@ -48,8 +47,7 @@ export function createScene(canvas, { reducedMotion = false } = {}) {
   let camBack = 0;
   function resize() {
     const w = innerWidth, h = innerHeight;
-    const scale = Math.min(1, RENDER_HEIGHT / h);
-    renderer.setSize(Math.round(w * scale), Math.round(h * scale), false);
+    renderer.setSize(w, h, false);
     camera.aspect = w / h;
     const portrait = w / h < 1;
     camera.fov = portrait ? 66 : 50;   // en móvil, más angular y algo más lejos para que quepa todo
