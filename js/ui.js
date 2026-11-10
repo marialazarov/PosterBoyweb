@@ -65,6 +65,15 @@ export function initUI({ audio, world }) {
     items[0].focus({ preventScroll: true });
   }
 
+  function toggleRadio() {
+    if (state === 'intro') start();
+    const on = !audio.isRadioOn();
+    audio.setRadio(on);
+    world.setRadio(on);
+    body.classList.toggle('radio-on', on);
+  }
+  world.onRadioClick(toggleRadio);
+
   function open(key) {
     if (state !== 'menu') return;
     const s = SECTIONS[key];
@@ -92,7 +101,7 @@ export function initUI({ audio, world }) {
     if (state === 'intro') { e.preventDefault(); start(); return; }
 
     const k = e.key.toLowerCase();
-    if (k === 'm') { body.classList.toggle('is-muted', !audio.toggle()); return; }
+    if (k === 'r') { toggleRadio(); return; }
 
     if (state === 'menu') {
       if (k === 'arrowup' || k === 'w')   { e.preventDefault(); select(index - 1); }

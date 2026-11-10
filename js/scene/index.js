@@ -14,7 +14,7 @@ THREE.ColorManagement.enabled = false;   // colores "tal cual"
 export function createScene(canvas, { reducedMotion = false } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(1);   // un pelín suave, sin llegar a pixelado
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR);
@@ -34,7 +34,8 @@ export function createScene(canvas, { reducedMotion = false } = {}) {
   fill.position.set(2, 4, 10);
   scene.add(fill);
 
-  const parts = [createSky(), createSea(), createBay(), createBeach(), createProps(), createCharacters()];
+  const props = createProps();
+  const parts = [createSky(), createSea(), createBay(), createBeach(), props, createCharacters()];
   parts.forEach(p => scene.add(p.object));
 
   // mirar un poco con el ratón
@@ -82,7 +83,24 @@ export function createScene(canvas, { reducedMotion = false } = {}) {
   }
   requestAnimationFrame(frame);
 
+  // clic (o toque) en la radio de la mesa
+  const raycaster = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  const onRadio = [];
+  function overRadio(e) {
+    if (e.target !== canvas) return false;
+    ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    return raycaster.intersectObject(props.radioHit, false).length > 0;
+  }
+  window.addEventListener('pointermove', e => { canvas.style.cursor = overRadio(e) ? 'pointer' : ''; });
+  window.addEventListener('click', e => { if (overRadio(e)) onRadio.forEach(fn => fn()); });
+
   return {
+    /** Llama a fn cuando se toca la radio. */
+    onRadioClick(fn) { onRadio.push(fn); },
+    /** Enciende o apaga la radio en la escena (luces del dial). */
+    setRadio(on) { props.setRadio(on); },
     /** Ilumina un elemento de la escena: 'town' | 'lamp' | 'island' | null */
     setFocus(key) { parts.forEach(p => p.setFocus && p.setFocus(key)); },
   };

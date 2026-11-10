@@ -1,6 +1,6 @@
-// Sillas plegables rojas, mesita blanca, lámpara, latas y cañas de pescar.
+// Sillas plegables rojas, mesita blanca, lámpara, radio, latas y cañas de pescar.
 import * as THREE from 'three';
-import { WATER_Y, rand, glowSprite } from './util.js';
+import { WATER_Y, rand, glowSprite, canvasTexture } from './util.js';
 import { groundHeight } from './beach.js';
 
 export const CHAIR_X = { maria: -0.85, luz: 0.85 };   // vistas desde detrás
@@ -32,6 +32,67 @@ function makeChair() {
   }
   bar(-0.29, 0.05, -0.22, 0.29, 0.44, -0.22);   // aspa frontal
   return g;
+}
+
+// Radio de transistores pequeñita. El frente mira hacia +z (hacia la cámara).
+function makeRadio() {
+  const g = new THREE.Group();
+  const W = 0.15, H = 0.095, D = 0.05;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), lam('#7fb2a2'));
+  g.add(body);
+
+  // frente: rejilla de altavoz a la izquierda y dial con frecuencias a la derecha
+  const face = canvasTexture(256, 160, (c, w, h) => {
+    c.fillStyle = '#efe6d2'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#b9ad95';
+    for (let y = 18; y < h - 10; y += 11) for (let x = 16; x < 132; x += 11) {
+      c.beginPath(); c.arc(x, y, 3.2, 0, Math.PI * 2); c.fill();
+    }
+    c.fillStyle = '#2b2622'; c.fillRect(148, 22, 94, 58);
+    c.strokeStyle = '#d9cdb4'; c.lineWidth = 2;
+    for (let i = 0; i <= 8; i++) { const x = 156 + i * 10; c.beginPath(); c.moveTo(x, 30); c.lineTo(x, i % 2 ? 40 : 46); c.stroke(); }
+    c.fillStyle = '#d9cdb4'; c.font = '13px Futura, Jost, sans-serif';
+    c.fillText('88   96   104', 152, 70);
+    c.fillStyle = '#c2392b'; c.fillRect(186, 26, 3, 50);          // aguja
+    c.fillStyle = '#5c8f80'; c.font = 'bold 15px Futura, Jost, sans-serif';
+    c.fillText('PB', 182, 130);
+  });
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.92, H * 0.86), new THREE.MeshLambertMaterial({ map: face }));
+  front.position.z = D / 2 + 0.001;
+  g.add(front);
+
+  // brillo del dial cuando suena
+  const dialGlow = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.34, H * 0.31),
+    new THREE.MeshBasicMaterial({ color: '#ffb35c', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  dialGlow.position.set(W * 0.21, H * 0.12, D / 2 + 0.002);
+  g.add(dialGlow);
+
+  // ruedecita del volumen, asa y antena
+  const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.012, 14), lam('#efe6d2'));
+  knob.rotation.z = Math.PI / 2; knob.position.set(W / 2 + 0.005, H * 0.18, 0.004);
+  g.add(knob);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.005, 6, 16, Math.PI), lam('#2a2422'));
+  handle.position.set(0, H / 2, -0.005);
+  g.add(handle);
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.0018, 0.0028, 0.26, 5).translate(0, 0.13, 0), lam('#c9c4c0'));
+  antenna.position.set(-W / 2 + 0.015, H / 2, -0.015);
+  antenna.rotation.set(-0.25, 0, 0.55);
+  g.add(antenna);
+
+  // lucecita de encendido
+  const led = new THREE.Mesh(new THREE.SphereGeometry(0.006, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff5a3c' }));
+  led.position.set(W * 0.38, -H * 0.32, D / 2 + 0.003);
+  g.add(led);
+  const ledGlow = glowSprite('#ff7a50', 0.07, 0.6);
+  ledGlow.position.copy(led.position);
+  g.add(ledGlow);
+
+  // zona de clic más grande que la radio, para acertar fácil (también en móvil)
+  const hit = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.26, 0.22), new THREE.MeshBasicMaterial({ visible: false }));
+  hit.position.y = 0.04;
+  g.add(hit);
+
+  return { object: g, hit, dialGlow, led, ledGlow, knob };
 }
 
 function blobShadow(w, d, opacity = 0.55) {
@@ -101,14 +162,21 @@ export function createProps() {
   lamp.position.set(TX + 0.03, ty + 0.47, TZ + 0.04);
   group.add(lamp);
 
-  // latas, bote y piedras sobre la mesa
+  // radio, a la izquierda de la lámpara, girada un poco hacia vosotras
+  const radio = makeRadio();
+  const RS = 1.45;   // un poco más grande que una radio real, para que se vea desde la cámara
+  radio.object.scale.setScalar(RS);
+  radio.object.position.set(TX - 0.125, ty + 0.4675 + 0.0475 * RS, TZ - 0.02);
+  radio.object.rotation.y = 0.28;
+  group.add(radio.object);
+  let radioOn = false, radioLevel = 0;
+
+  // latas y piedras sobre la mesa
   const can = new THREE.CylinderGeometry(0.033, 0.033, 0.12, 10);
   const green = lam('#2c5a36');
-  for (const [x, z] of [[-0.15, 0.1], [0.16, 0.12]]) {
+  for (const [x, z] of [[0.17, 0.13], [0.1, 0.18]]) {
     const c = new THREE.Mesh(can, green); c.position.set(TX + x, ty + 0.53, TZ + z); group.add(c);
   }
-  const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.09, 10), lam('#3a2a24'));
-  jar.position.set(TX - 0.08, ty + 0.51, TZ - 0.1); group.add(jar);
   const pebble = new THREE.IcosahedronGeometry(0.035, 0);
   for (let i = 0; i < 5; i++) {
     const p = new THREE.Mesh(pebble, lam('#a07b58', { flatShading: true }));
@@ -151,7 +219,18 @@ export function createProps() {
   return {
     object: group,
     setFocus(key) { lampTarget = key === 'lamp' ? 1 : 0; },
+    radioHit: radio.hit,
+    setRadio(on) { radioOn = on; },
     update(t, _cam, dt) {
+      // radio: el dial se enciende al sonar; apagada, la luz parpadea despacio para que la toques
+      radioLevel += ((radioOn ? 1 : 0) - radioLevel) * Math.min(1, dt * 6);
+      radio.dialGlow.material.opacity = 0.55 * radioLevel * (0.92 + 0.08 * Math.sin(t * 9));
+      const invite = 0.5 + 0.5 * Math.sin(t * 2.4);
+      radio.ledGlow.material.opacity = radioOn ? 0.9 : 0.15 + 0.5 * invite;
+      radio.ledGlow.scale.setScalar(radioOn ? 0.09 : 0.06 + 0.03 * invite);
+      radio.led.material.color.set(radioOn ? '#ffb070' : '#ff5a3c');
+      radio.knob.rotation.x = radioLevel * 1.4;
+
       // lámpara: parpadeo suave + énfasis desde el menú
       lampBoost += (lampTarget - lampBoost) * Math.min(1, dt * 3);
       const flick = 1 + 0.035 * Math.sin(t * 13.1) * Math.sin(t * 7.3) + (Math.random() < 0.01 ? -0.08 : 0);

@@ -1,15 +1,15 @@
-// Sonido de fondo: «motel» (slowed + reverb) desde el 4:03, en bucle,
-// con olas y brisa muy bajitas por debajo.
+// Sonido de la playa: olas y brisa siempre, y una radio en la mesa
+// que, al encenderla, suena «motel» (slowed + reverb) desde el 4:03.
 
 const SONG_URL = 'assets/audio/motel.m4a';
 const SONG_GAIN = 0.9;
 
-// La descarga empieza ya, para que la canción esté lista al pulsar una tecla.
+// La descarga empieza ya, para que la canción esté lista cuando enciendas la radio.
 const songData = fetch(SONG_URL).then(r => r.arrayBuffer()).catch(() => null);
 
-let ctx, master;
-let on = true;
+let ctx, master, radioGain;
 let started = false;
+let radioOn = false;
 
 function noiseBuffer(seconds, brown) {
   const len = ctx.sampleRate * seconds;
@@ -35,9 +35,9 @@ export function start() {
   const waves = ctx.createBufferSource();
   waves.buffer = noiseBuffer(4, true); waves.loop = true;
   const wlp = ctx.createBiquadFilter(); wlp.type = 'lowpass'; wlp.frequency.value = 650;
-  const wg = ctx.createGain(); wg.gain.value = 0.1;
+  const wg = ctx.createGain(); wg.gain.value = 0.25;
   const swell = ctx.createOscillator(); swell.frequency.value = 0.11;
-  const swellAmt = ctx.createGain(); swellAmt.gain.value = 0.08;
+  const swellAmt = ctx.createGain(); swellAmt.gain.value = 0.2;
   swell.connect(swellAmt).connect(wg.gain);
   waves.connect(wlp).connect(wg).connect(master);
   waves.start(); swell.start();
@@ -49,36 +49,75 @@ export function start() {
   const gust = ctx.createOscillator(); gust.frequency.value = 0.05;
   const gustAmt = ctx.createGain(); gustAmt.gain.value = 400;
   gust.connect(gustAmt).connect(bp.frequency);
-  const windGain = ctx.createGain(); windGain.gain.value = 0.012;
+  const windGain = ctx.createGain(); windGain.gain.value = 0.025;
   wind.connect(bp).connect(windGain).connect(master);
   wind.start(); gust.start();
 
-  playSong();
+  master.gain.setTargetAtTime(0.8, ctx.currentTime, 1.5);
 
-  master.gain.setTargetAtTime(on ? 0.8 : 0, ctx.currentTime, 1.5);
+  // la radio: un poco de color de altavoz pequeño, pero que se oiga bien
+  radioGain = ctx.createGain(); radioGain.gain.value = 0;
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 110;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7500;
+  hp.connect(lp).connect(radioGain).connect(master);
+  loadSong(hp);
 }
 
-async function playSong() {
+async function loadSong(out) {
   const data = await songData;
   if (!data) return;
   // decodeAudioData con callbacks: Safari antiguo no devuelve promesa
   const buffer = await new Promise((ok, ko) => ctx.decodeAudioData(data, ok, ko)).catch(() => null);
   if (!buffer) return;
+  // suena siempre por dentro, como una emisora: la radio solo sube o baja el volumen
   const song = ctx.createBufferSource();
   song.buffer = buffer; song.loop = true;
-  const g = ctx.createGain(); g.gain.value = SONG_GAIN;
-  song.connect(g).connect(master);
+  song.connect(out);
   song.start();
 }
 
-export function toggle() {
-  on = !on;
-  if (master) master.gain.setTargetAtTime(on ? 0.8 : 0, ctx.currentTime, 0.25);
-  return on;
+/** Enciende o apaga la radio de la mesa. */
+export function setRadio(on) {
+  radioOn = on;
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  radioGain.gain.cancelScheduledValues(t);
+  radioGain.gain.setTargetAtTime(on ? SONG_GAIN : 0, t + (on ? 0.15 : 0), on ? 0.25 : 0.08);
+  click();
+  if (on) staticBurst();
+}
+
+export const isRadioOn = () => radioOn;
+
+// «clac» del botón de la radio
+function click() {
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource();
+  src.buffer = noiseBuffer(0.03, false);
+  const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 2500;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.25, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+  src.connect(f).connect(g).connect(ctx.destination);
+  src.start(t);
+}
+
+// un instante de estática mientras «sintoniza»
+function staticBurst() {
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource();
+  src.buffer = noiseBuffer(0.5, false);
+  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2200; f.Q.value = 0.8;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.06, t + 0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+  src.connect(f).connect(g).connect(master);
+  src.start(t);
 }
 
 export function blip(kind = 'move') {
-  if (!ctx || !on) return;
+  if (!ctx) return;
   const notes = {
     move:   [[880, 0]],
     select: [[659.25, 0], [987.77, 0.08]],
