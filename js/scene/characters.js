@@ -45,8 +45,8 @@ const plaid = (rx = 1, ry = 1) => {
 const camo = () => {
   const t = canvasTexture(256, 256, (g, w, h) => {
     const R = rand(5);
-    g.fillStyle = '#b89f6c'; g.fillRect(0, 0, w, h);
-    for (const c of ['#f2e2b8', '#6e4422', '#1e1610', '#7d7a40', '#f2e2b8', '#6e4422']) {
+    g.fillStyle = '#7d6a44'; g.fillRect(0, 0, w, h);
+    for (const c of ['#cfb27c', '#5a3a1e', '#1c140e', '#5f5a30', '#cfb27c', '#4a3018']) {
       g.fillStyle = c;
       for (let i = 0; i < 9; i++) {
         // manchas alargadas e irregulares (woodland), que también cruzan el borde
@@ -547,7 +547,7 @@ function makeLuz() {
 // ── María: afro grande, tirantes blanca, tatuajes, cargo de camuflaje muy anchos ──
 function makeMaria() {
   const pants = lam('#ffffff', { map: camo() });
-  pants.color.setRGB(1.2, 1.15, 1.1);   // que el camuflaje se lea con la luz del atardecer
+  pants.color.setRGB(1.0, 0.97, 0.94);   // que el camuflaje se lea con la luz del atardecer
   const rig = riggedBody({
     top: phong('#ffffff', { map: tankTex() }), armMat: phong('#ffffff', { map: tattooArm() }),
     thighs: pants, shins: pants, armsCrossed: true, bust: 0.01,
