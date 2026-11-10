@@ -286,8 +286,9 @@ function place(m, a, b) {
 
 function torsoGeo(bust) {
   // perfil de cadera → cintura → pecho → hombros (en coordenadas de sentada)
-  const prof = [[0.0001, 0.47], [0.1, 0.478], [0.142, 0.53], [0.146, 0.58], [0.128, 0.645], [0.114, 0.7],
-    [0.12, 0.76], [0.128 + bust, 0.815], [0.132 + bust * 0.6, 0.865], [0.148, 0.915], [0.14, 0.952],
+  // tronco recto: cadera, cintura apenas marcada y hombros, sin pecho
+  const prof = [[0.0001, 0.47], [0.1, 0.478], [0.136, 0.53], [0.138, 0.58], [0.128, 0.65], [0.124, 0.72],
+    [0.128, 0.79], [0.132, 0.86], [0.142, 0.915], [0.136, 0.952],
     [0.1, 0.982], [0.05, 0.998], [0.0001, 1.004]];
   const curve = new THREE.SplineCurve(prof.map(([r, y]) => new THREE.Vector2(r, y)));
   const g = new THREE.LatheGeometry(curve.getPoints(48), 32);
@@ -622,6 +623,7 @@ export function createCharacters({ sparkles } = {}) {
     p.waveSide = out < 0 ? 1 : -1;                 // saluda con el brazo de fuera
     p.s = 0; p.target = 0; p.hl = 0; p.waveT = 0; p.arrived = false;
     p.body.position.set(p.x, groundHeight(p.x, CHAIR_Z), CHAIR_Z);
+    p.body.scale.setScalar(0.86);   // tamaño de persona junto a las sillas
     p.body.rotation.y = p.home.rot;
     group.add(p.body);
 
