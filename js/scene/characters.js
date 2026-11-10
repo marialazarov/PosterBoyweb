@@ -13,7 +13,7 @@ const phong = (c, extra = {}) => new THREE.MeshPhongMaterial({ color: c, shinine
 const clamp01 = x => Math.min(1, Math.max(0, x));
 const smooth = x => { x = clamp01(x); return x * x * (3 - 2 * x); };
 
-const SKIN = '#e4b59c';
+const SKIN = '#efc8b0';
 const LIFT = 0.36;            // cuánto sube la cadera al ponerse de pie
 const DURATION = 2.6;         // segundos de levantarse → girarse → venir
 
@@ -45,18 +45,21 @@ const plaid = (rx = 1, ry = 1) => {
 const camo = () => {
   const t = canvasTexture(128, 256, (g, w, h) => {
     const R = rand(5);
-    g.fillStyle = '#6e5d3c'; g.fillRect(0, 0, w, h);
-    for (const c of ['#c39a5c', '#3b2c1c', '#4f4a2c', '#8a7445']) {
+    g.fillStyle = '#ad9668'; g.fillRect(0, 0, w, h);
+    for (const c of ['#ead6a8', '#6f4c2c', '#2e221a', '#827a4a']) {
       g.fillStyle = c;
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < 11; i++) {
+        const x = R() * w, y = R() * h, sx = 14 + R() * 18, sy = 10 + R() * 16;
         g.beginPath();
-        const x = R() * w, y = R() * h;
-        g.moveTo(x, y);
-        for (let k = 0; k < 6; k++) g.lineTo(x + (R() - 0.5) * 34, y + (R() - 0.5) * 22);
+        for (let k = 0; k <= 10; k++) {
+          const a = (k / 10) * Math.PI * 2, rr = 0.65 + R() * 0.5;
+          const px = x + Math.cos(a) * sx * rr, py = y + Math.sin(a) * sy * rr;
+          k ? g.lineTo(px, py) : g.moveTo(px, py);
+        }
         g.fill();
       }
     }
-    folds(g, w, h, 9, 0.22, R);
+    folds(g, w, h, 9, 0.16, R);
   }, { repeat: true });
   return t;
 };
@@ -71,16 +74,33 @@ const tattooArm = () => canvasTexture(128, 128, (g, w, h) => {
     g.bezierCurveTo(x - s * 1.4, y, x - s * 0.8, y - s, x, y - s * 0.3);
     g.bezierCurveTo(x + s * 0.8, y - s, x + s * 1.4, y, x, y + s); g.stroke();
   };
-  heart(40, 60, 7); heart(98, 34, 5);
-  g.beginPath(); g.arc(80, 92, 6, 0, Math.PI * 2); g.stroke();
-  g.beginPath(); g.moveTo(20, 100); g.lineTo(30, 112); g.lineTo(40, 98); g.stroke();
-  for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(10 + R() * 110, 10 + R() * 30, 1.5, 0, Math.PI * 2); g.fill(); }
-  g.beginPath(); g.moveTo(64, 14); g.quadraticCurveTo(74, 26, 64, 38); g.stroke();
+  // (la textura se usa en brazo y antebrazo; v=1 arriba = hombro / codo)
+  // dibujo de flor-insecto en lo alto del brazo, por fuera
+  g.lineWidth = 1.6;
+  g.save(); g.translate(30, 22);
+  for (let i = 0; i < 5; i++) { g.beginPath(); g.ellipse(0, 0, 9, 3.5, i * Math.PI / 5, 0, Math.PI * 2); g.stroke(); }
+  g.beginPath(); g.arc(0, 0, 3, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.moveTo(-14, 6); g.quadraticCurveTo(-4, 14, 12, 10); g.stroke();
+  g.beginPath(); g.moveTo(10, -10); g.lineTo(18, -16); g.moveTo(12, -6); g.lineTo(20, -8); g.stroke();
+  g.restore();
+  heart(32, 66, 6);                                       // corazón pequeño
+  // mancha sombreada (blackwork) en el antebrazo
+  const blot = g.createRadialGradient(86, 96, 2, 86, 96, 16);
+  blot.addColorStop(0, 'rgba(45,50,60,.75)'); blot.addColorStop(1, 'rgba(45,50,60,0)');
+  g.fillStyle = blot; g.fillRect(66, 76, 40, 40);
+  g.fillStyle = 'rgba(40,28,36,.75)';
+  for (let i = 0; i < 40; i++) { g.beginPath(); g.arc(78 + R() * 18, 88 + R() * 16, 0.8, 0, Math.PI * 2); g.fill(); }
+  // símbolos pequeños por dentro
+  g.beginPath(); g.arc(100, 40, 4, 0, Math.PI * 2); g.moveTo(100, 44); g.lineTo(100, 52); g.moveTo(96, 48); g.lineTo(104, 48); g.stroke();
+  g.beginPath(); g.moveTo(110, 66); g.lineTo(116, 60); g.lineTo(122, 66); g.lineTo(116, 72); g.closePath(); g.stroke();
+  g.beginPath(); g.moveTo(56, 112); g.lineTo(62, 104); g.lineTo(68, 112); g.stroke();
+  for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(10 + R() * 110, 10 + R() * 100, 1.2, 0, Math.PI * 2); g.fill(); }
 });
 
 // camiseta de tirantes blanca (María). Lathe: u da la vuelta (0,5 = delante), v sube.
+const PINK = '#f5d5dd';
 const tankTex = () => canvasTexture(256, 256, (g, w, h) => {
-  g.fillStyle = '#f4efea'; g.fillRect(0, 0, w, h);
+  g.fillStyle = PINK; g.fillRect(0, 0, w, h);
   folds(g, w, h, 8, 0.05, rand(3));
   // canalé
   g.fillStyle = 'rgba(0,0,0,.04)';
@@ -92,10 +112,14 @@ const tankTex = () => canvasTexture(256, 256, (g, w, h) => {
   g.beginPath(); g.ellipse(0, 0, w * 0.06, h * 0.16, 0, 0, Math.PI * 2); g.fill();
   g.beginPath(); g.ellipse(w, 0, w * 0.06, h * 0.16, 0, 0, Math.PI * 2); g.fill();
   for (const u of [0.25, 0.75]) { g.beginPath(); g.ellipse(w * u, 0, w * 0.13, h * 0.22, 0, 0, Math.PI * 2); g.fill(); }
-  g.fillStyle = '#f4efea';
+  g.fillStyle = PINK;
   for (const u of [0.36, 0.64, 0.12, 0.88]) g.fillRect(w * u - 5, 0, 10, h * 0.2);
+  // tatuaje «tous les jours» bajo la clavícula
+  g.fillStyle = 'rgba(40,28,36,.8)';
+  g.font = 'italic 7px Georgia, serif'; g.textAlign = 'center';
+  g.fillText('tous', w * 0.5, h * 0.105); g.fillText('les jours', w * 0.5, h * 0.14);
   // collar fino
-  g.strokeStyle = 'rgba(200,190,170,.9)'; g.lineWidth = 1.5;
+  g.strokeStyle = 'rgba(220,170,180,.9)'; g.lineWidth = 1.5;
   g.beginPath(); g.moveTo(w * 0.47, h * 0.06); g.lineTo(w * 0.5, h * 0.17); g.lineTo(w * 0.53, h * 0.06); g.stroke();
 });
 
@@ -105,15 +129,14 @@ const ringerTex = () => canvasTexture(512, 256, (g, w, h) => {
   folds(g, w, h, 10, 0.05, rand(4));
   g.fillStyle = SKIN; g.fillRect(0, 0, w, h * 0.07);
   g.beginPath(); g.ellipse(w * 0.5, h * 0.04, w * 0.06, h * 0.1, 0, 0, Math.PI * 2); g.fill();
-  g.strokeStyle = '#33262a'; g.lineWidth = 7;
+  g.strokeStyle = '#3e2c28'; g.lineWidth = 7;
   g.beginPath(); g.moveTo(0, h * 0.075); g.lineTo(w * 0.44, h * 0.075);
   g.ellipse(w * 0.5, h * 0.04, w * 0.06, h * 0.105, 0, Math.PI, 0, true);
   g.moveTo(w * 0.56, h * 0.075); g.lineTo(w, h * 0.075); g.stroke();
   g.fillStyle = '#1f1a2a';
-  g.font = 'italic 600 34px "Snell Roundhand", "Brush Script MT", "Segoe Script", cursive';
+  g.font = 'italic 600 30px "Snell Roundhand", "Brush Script MT", "Segoe Script", cursive';
   g.textAlign = 'center';
-  g.fillText('Poster Boy', w * 0.5, h * 0.36);
-  g.fillStyle = '#5a2a2a'; g.beginPath(); g.arc(w * 0.5, h * 0.22, 3, 0, Math.PI * 2); g.fill();   // colgante
+  g.fillText('Laagam', w * 0.5, h * 0.36);
 });
 
 // espinilla: rodilla de piel y calcetín negro alto
@@ -333,7 +356,7 @@ function riggedBody({ top, sleeves, armMat, thighs, shins, shoes, armsCrossed, f
     const up = bone(0.032, 0.027, 0.26, armMat), fore = bone(0.026, 0.02, 0.245, armMat);
     const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.027, 8, 6), armMat);
     const h = hand(skin);
-    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 10), sleeves || top);
+    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 10), sleeves || armMat);
     shoulder.scale.set(1, 0.9, 0.9);
     const sleeve = sleeves ? bone(0.05, 0.046, 0.1, sleeves) : null;
     body.add(up, fore, elbow, h, shoulder); if (sleeve) body.add(sleeve);
@@ -397,7 +420,7 @@ function riggedBody({ top, sleeves, armMat, thighs, shins, shoes, armsCrossed, f
 function makeLuz() {
   const tee = lam('#ffffff', { map: ringerTex() });
   const sleeveMat = lam('#f6f1e8');
-  const trim = lam('#33262a');
+  const trim = lam('#3e2c28');
   const skirt = lam('#ffffff', { map: plaid(2, 1), side: THREE.DoubleSide });
   const rig = riggedBody({
     top: tee, sleeves: sleeveMat, armMat: phong(SKIN), bust: 0.014,
@@ -418,6 +441,15 @@ function makeLuz() {
   const choker = new THREE.Mesh(new THREE.TorusGeometry(0.039, 0.005, 6, 18), lam('#1c1820'));
   choker.rotation.x = Math.PI / 2 - 0.15; choker.position.set(0, 1.035, 0.075);
   upper.add(choker);
+  const silver = lam('#d6d6dc');
+  const chain = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.0016, 4, 24, Math.PI), silver);
+  chain.position.set(0, 1.0, 0.05); chain.rotation.set(Math.PI / 2 + 0.75, 0, Math.PI);
+  upper.add(chain);
+  for (const [x, y, s] of [[0, 0.935, 0.008], [0.012, 0.955, 0.006]]) {
+    const charm = new THREE.Mesh(new THREE.OctahedronGeometry(s), x ? silver : lam('#222026'));
+    charm.scale.y = 1.6; charm.position.set(x, y, -0.035);
+    upper.add(charm);
+  }
 
   // falda midi con vuelo: sentada cae por delante de las rodillas; de pie, de la cadera a media pierna
   const hem = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.22, 0.16, 16, 1, true), skirt);
@@ -437,7 +469,7 @@ function makeLuz() {
   upper.add(waist);
   rig.body.add(hem, flare);
 
-  const hairMat = phong('#ffffff', { map: hairStrands('#4e3122', 'rgba(150,100,70,1)', 'rgba(30,18,12,1)', 7), side: THREE.DoubleSide, shininess: 30 });
+  const hairMat = phong('#ffffff', { map: hairStrands('#a07a4c', 'rgba(222,190,140,1)', 'rgba(110,78,46,1)', 7), side: THREE.DoubleSide, shininess: 30 });
   // gorro de pelo: por detrás y por arriba, con raya en medio
   for (const geo of [
     new THREE.SphereGeometry(0.096, 16, 12, 0, Math.PI, 0, Math.PI * 0.75),
@@ -462,6 +494,13 @@ function makeLuz() {
     lock.rotation.z = sx * 0.12;
     lock.scale.z = 0.5;
     head.add(lock);
+  }
+  // flequillo cortina, abierto en medio
+  for (const sx of [-1, 1]) {
+    const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8, Math.PI * 1.5 - (sx < 0 ? 0.95 : -0.05), 0.9, Math.PI * 0.2, Math.PI * 0.2), hairMat);
+    fringe.position.set(0, 0.105, 0.004);
+    fringe.scale.set(0.95, 1.12, 1.0);
+    head.add(fringe);
   }
   // moñito arriba
   const bun = new THREE.Mesh(new THREE.IcosahedronGeometry(0.03, 1), hairMat);
@@ -498,7 +537,7 @@ function makeMaria() {
     thighs: pants, shins: pants, armsCrossed: true, bust: 0.01,
     shoes: () => sneaker(lam('#4a3024'), '#3a2a20'),
     face: { brows: '#1e130e', lips: '#b3272f', iris: '#3e2618', lashes: 5 },
-    legR: [0.1, 0.095, 0.095, 0.105],     // pantalón muy ancho que cae sobre las zapatillas
+    legR: [0.11, 0.105, 0.105, 0.125],     // pantalón muy ancho que cae sobre las zapatillas
   });
   // cintura del pantalón
   const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.15, 0.1, 18), pants);
