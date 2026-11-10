@@ -227,9 +227,8 @@ export function createOptions({ sparkles }) {
       if (!items.length) return;
       if (this.headFn) this.headFn(anchor);
       camera.matrixWorld.extractBasis(right, up, toCam);
-      // el arco se desplaza un poco hacia el centro de la pantalla
-      const center = tmp.copy(anchor).sub(camera.position).dot(right);
-      const arcAnchor = anchor.clone().addScaledVector(right, -Math.sign(center) * 0.22);
+      // el arco queda centrado justo encima de la cabeza
+      const arcAnchor = anchor;
       const R = 0.36;
 
       let any = false;

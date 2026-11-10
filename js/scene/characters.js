@@ -43,24 +43,29 @@ const plaid = (rx = 1, ry = 1) => {
 };
 
 const camo = () => {
-  const t = canvasTexture(128, 256, (g, w, h) => {
+  const t = canvasTexture(256, 256, (g, w, h) => {
     const R = rand(5);
-    g.fillStyle = '#ad9668'; g.fillRect(0, 0, w, h);
-    for (const c of ['#ead6a8', '#6f4c2c', '#2e221a', '#827a4a']) {
+    g.fillStyle = '#b89f6c'; g.fillRect(0, 0, w, h);
+    for (const c of ['#f2e2b8', '#6e4422', '#1e1610', '#7d7a40', '#f2e2b8', '#6e4422']) {
       g.fillStyle = c;
-      for (let i = 0; i < 11; i++) {
-        const x = R() * w, y = R() * h, sx = 14 + R() * 18, sy = 10 + R() * 16;
-        g.beginPath();
-        for (let k = 0; k <= 10; k++) {
-          const a = (k / 10) * Math.PI * 2, rr = 0.65 + R() * 0.5;
-          const px = x + Math.cos(a) * sx * rr, py = y + Math.sin(a) * sy * rr;
-          k ? g.lineTo(px, py) : g.moveTo(px, py);
+      for (let i = 0; i < 9; i++) {
+        // manchas alargadas e irregulares (woodland), que también cruzan el borde
+        const x = R() * w, y = R() * h, sx = 22 + R() * 26, sy = 7 + R() * 9, rot = (R() - 0.5) * 1.2;
+        for (const [ox, oy] of [[0, 0], [w, 0], [-w, 0], [0, h], [0, -h]]) {
+          g.save(); g.translate(x + ox, y + oy); g.rotate(rot);
+          g.beginPath();
+          for (let k = 0; k <= 14; k++) {
+            const a = (k / 14) * Math.PI * 2, rr = 0.55 + R() * 0.6;
+            const px = Math.cos(a) * sx * rr, py = Math.sin(a) * sy * rr + Math.sin(a * 3) * 4;
+            k ? g.lineTo(px, py) : g.moveTo(px, py);
+          }
+          g.fill(); g.restore();
         }
-        g.fill();
       }
     }
-    folds(g, w, h, 9, 0.16, R);
+    folds(g, w, h, 9, 0.12, R);
   }, { repeat: true });
+  t.repeat.set(2, 2);
   return t;
 };
 
@@ -254,15 +259,20 @@ function shapeHead(geo) {
 // ── Huesos: cápsulas que se estrechan, recolocadas en cada fotograma ──
 const UP = new THREE.Vector3(0, 1, 0);
 const _d = new THREE.Vector3();
-function taperGeo(rA, rB, len, seg = 12) {
+function taperGeo(rA, rB, len, bulge = 0, at = 0.4, seg = 16) {
   const pts = [];
-  for (let i = 0; i <= 5; i++) { const a = -Math.PI / 2 + (i / 5) * Math.PI / 2; pts.push(new THREE.Vector2(Math.cos(a) * rA, -len / 2 + Math.sin(a) * rA)); }
-  for (let i = 0; i <= 5; i++) { const a = (i / 5) * Math.PI / 2; pts.push(new THREE.Vector2(Math.cos(a) * rB, len / 2 + Math.sin(a) * rB)); }
+  for (let i = 0; i <= 6; i++) { const a = -Math.PI / 2 + (i / 6) * Math.PI / 2; pts.push(new THREE.Vector2(Math.cos(a) * rA, -len / 2 + Math.sin(a) * rA)); }
+  for (let i = 1; i < 10; i++) {
+    const k = i / 10;
+    const bump = bulge * Math.pow(Math.sin(Math.PI * Math.min(1, k < at ? k / at * 0.5 : 0.5 + (k - at) / (1 - at) * 0.5)), 1.5);
+    pts.push(new THREE.Vector2(rA + (rB - rA) * k + bump, -len / 2 + len * k));
+  }
+  for (let i = 0; i <= 6; i++) { const a = (i / 6) * Math.PI / 2; pts.push(new THREE.Vector2(Math.cos(a) * rB, len / 2 + Math.sin(a) * rB)); }
   pts[0].x = 0.0001; pts[pts.length - 1].x = 0.0001;
   return new THREE.LatheGeometry(pts, seg);
 }
-function bone(rA, rB, len, mat) {
-  const m = new THREE.Mesh(taperGeo(rA, rB, len), mat);
+function bone(rA, rB, len, mat, bulge = 0, at = 0.4) {
+  const m = new THREE.Mesh(taperGeo(rA, rB, len, bulge, at), mat);
   m.userData.len = len;
   return m;
 }
@@ -276,9 +286,11 @@ function place(m, a, b) {
 
 function torsoGeo(bust) {
   // perfil de cadera → cintura → pecho → hombros (en coordenadas de sentada)
-  const prof = [[0.0001, 0.48], [0.12, 0.49], [0.14, 0.54], [0.135, 0.6], [0.115, 0.67], [0.118, 0.74],
-    [0.13 + bust, 0.81], [0.135 + bust * 0.6, 0.87], [0.14, 0.92], [0.125, 0.97], [0.075, 1.0], [0.045, 1.01]];
-  const g = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 20);
+  const prof = [[0.0001, 0.47], [0.1, 0.478], [0.142, 0.53], [0.146, 0.58], [0.128, 0.645], [0.114, 0.7],
+    [0.12, 0.76], [0.128 + bust, 0.815], [0.132 + bust * 0.6, 0.865], [0.148, 0.915], [0.14, 0.952],
+    [0.1, 0.982], [0.05, 0.998], [0.0001, 1.004]];
+  const curve = new THREE.SplineCurve(prof.map(([r, y]) => new THREE.Vector2(r, y)));
+  const g = new THREE.LatheGeometry(curve.getPoints(48), 32);
   g.scale(1.18, 1, 0.72);
   g.translate(0, 0, 0.07);
   return g;
@@ -297,12 +309,15 @@ function sneaker(upperMat, soleColor) {
 
 function hand(mat) {
   const g = new THREE.Group();
-  const palm = new THREE.Mesh(new THREE.SphereGeometry(0.026, 10, 8), mat);
-  palm.scale.set(0.9, 1.5, 0.55);
-  palm.position.y = 0.03;
-  const thumb = bone(0.009, 0.008, 0.025, mat);
-  place(thumb, V(0.016, 0.02, -0.006), V(0.024, 0.045, -0.012));
-  g.add(palm, thumb);
+  const palm = new THREE.Mesh(new THREE.SphereGeometry(0.03, 14, 10), mat);
+  palm.scale.set(0.95, 1.25, 0.5);
+  palm.position.y = 0.032;
+  const fingers = new THREE.Mesh(new THREE.SphereGeometry(0.026, 12, 8), mat);
+  fingers.scale.set(1.0, 1.4, 0.45);
+  fingers.position.set(0, 0.07, 0.002);
+  const thumb = bone(0.01, 0.008, 0.028, mat);
+  place(thumb, V(0.018, 0.022, -0.008), V(0.026, 0.05, -0.014));
+  g.add(palm, fingers, thumb);
   return g;
 }
 
@@ -316,7 +331,7 @@ function riggedBody({ top, sleeves, armMat, thighs, shins, shoes, armsCrossed, f
   const torso = new THREE.Mesh(torsoGeo(bust), top);
   upper.add(torso);
 
-  const neck = bone(0.036, 0.033, 0.07, skin);
+  const neck = bone(0.043, 0.038, 0.07, skin);
   place(neck, V(0, 0.98, 0.08), V(0, 1.07, 0.075));
   upper.add(neck);
 
@@ -346,17 +361,17 @@ function riggedBody({ top, sleeves, armMat, thighs, shins, shoes, armsCrossed, f
 
   // piernas y brazos
   const legs = [-1, 1].map(sx => {
-    const thigh = bone(legR[0], legR[1], 0.36, thighs), shin = bone(legR[2], legR[3], 0.4, shins);
+    const thigh = bone(legR[0], legR[1], 0.36, thighs, legR[4] || 0, 0.3), shin = bone(legR[2], legR[3], 0.4, shins, legR[5] || 0, 0.3);
     const knee = new THREE.Mesh(new THREE.SphereGeometry(legR[1] * 1.02, 10, 8), thighs);
     const shoe = shoes();
     body.add(thigh, shin, knee, shoe);
     return { sx, thigh, shin, knee, shoe };
   });
   const armsList = [-1, 1].map(sx => {
-    const up = bone(0.032, 0.027, 0.26, armMat), fore = bone(0.026, 0.02, 0.245, armMat);
-    const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.027, 8, 6), armMat);
+    const up = bone(0.038, 0.029, 0.26, armMat, 0.006, 0.4), fore = bone(0.03, 0.021, 0.235, armMat, 0.005, 0.25);
+    const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.029, 12, 8), armMat);
     const h = hand(skin);
-    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 10), sleeves || armMat);
+    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.046, 14, 10), sleeves || armMat);
     shoulder.scale.set(1, 0.9, 0.9);
     const sleeve = sleeves ? bone(0.05, 0.046, 0.1, sleeves) : null;
     body.add(up, fore, elbow, h, shoulder); if (sleeve) body.add(sleeve);
@@ -427,7 +442,7 @@ function makeLuz() {
     thighs: phong(SKIN), shins: phong('#ffffff', { map: sockTex() }),
     shoes: () => sneaker(lam('#ffffff', { map: stripedShoe() }), '#f1ede6'),
     face: { brows: '#3a2418', lips: '#c4706c', iris: '#5a3a24', lashes: 5.5 },
-    legR: [0.062, 0.045, 0.042, 0.033],
+    legR: [0.07, 0.046, 0.038, 0.029, 0.004, 0.012],
   });
   const { upper, head } = rig;
 
@@ -532,12 +547,13 @@ function makeLuz() {
 // ── María: afro grande, tirantes blanca, tatuajes, cargo de camuflaje muy anchos ──
 function makeMaria() {
   const pants = lam('#ffffff', { map: camo() });
+  pants.color.setRGB(1.2, 1.15, 1.1);   // que el camuflaje se lea con la luz del atardecer
   const rig = riggedBody({
     top: phong('#ffffff', { map: tankTex() }), armMat: phong('#ffffff', { map: tattooArm() }),
     thighs: pants, shins: pants, armsCrossed: true, bust: 0.01,
     shoes: () => sneaker(lam('#4a3024'), '#3a2a20'),
     face: { brows: '#1e130e', lips: '#b3272f', iris: '#3e2618', lashes: 5 },
-    legR: [0.11, 0.105, 0.105, 0.125],     // pantalón muy ancho que cae sobre las zapatillas
+    legR: [0.115, 0.108, 0.108, 0.13],     // pantalón muy ancho que cae sobre las zapatillas
   });
   // cintura del pantalón
   const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.15, 0.1, 18), pants);
