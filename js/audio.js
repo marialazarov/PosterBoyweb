@@ -1,5 +1,11 @@
-// Sonido ambiente provisional: olas que rompen suave y algo de brisa.
-// Cuando llegue el audio de «motel», se reproducirá aquí.
+// Sonido de fondo: «motel» (slowed + reverb) desde el 4:03, en bucle,
+// con olas y brisa muy bajitas por debajo.
+
+const SONG_URL = 'assets/audio/motel.m4a';
+const SONG_GAIN = 0.9;
+
+// La descarga empieza ya, para que la canción esté lista al pulsar una tecla.
+const songData = fetch(SONG_URL).then(r => r.arrayBuffer()).catch(() => null);
 
 let ctx, master;
 let on = true;
@@ -29,9 +35,9 @@ export function start() {
   const waves = ctx.createBufferSource();
   waves.buffer = noiseBuffer(4, true); waves.loop = true;
   const wlp = ctx.createBiquadFilter(); wlp.type = 'lowpass'; wlp.frequency.value = 650;
-  const wg = ctx.createGain(); wg.gain.value = 0.25;
+  const wg = ctx.createGain(); wg.gain.value = 0.1;
   const swell = ctx.createOscillator(); swell.frequency.value = 0.11;
-  const swellAmt = ctx.createGain(); swellAmt.gain.value = 0.2;
+  const swellAmt = ctx.createGain(); swellAmt.gain.value = 0.08;
   swell.connect(swellAmt).connect(wg.gain);
   waves.connect(wlp).connect(wg).connect(master);
   waves.start(); swell.start();
@@ -43,11 +49,26 @@ export function start() {
   const gust = ctx.createOscillator(); gust.frequency.value = 0.05;
   const gustAmt = ctx.createGain(); gustAmt.gain.value = 400;
   gust.connect(gustAmt).connect(bp.frequency);
-  const windGain = ctx.createGain(); windGain.gain.value = 0.025;
+  const windGain = ctx.createGain(); windGain.gain.value = 0.012;
   wind.connect(bp).connect(windGain).connect(master);
   wind.start(); gust.start();
 
+  playSong();
+
   master.gain.setTargetAtTime(on ? 0.8 : 0, ctx.currentTime, 1.5);
+}
+
+async function playSong() {
+  const data = await songData;
+  if (!data) return;
+  // decodeAudioData con callbacks: Safari antiguo no devuelve promesa
+  const buffer = await new Promise((ok, ko) => ctx.decodeAudioData(data, ok, ko)).catch(() => null);
+  if (!buffer) return;
+  const song = ctx.createBufferSource();
+  song.buffer = buffer; song.loop = true;
+  const g = ctx.createGain(); g.gain.value = SONG_GAIN;
+  song.connect(g).connect(master);
+  song.start();
 }
 
 export function toggle() {
