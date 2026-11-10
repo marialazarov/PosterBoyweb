@@ -70,20 +70,42 @@ const camo = () => {
   return t;
 };
 
+// brazo derecho de María: casita con dos palmeras junto al hombro (por fuera, u≈0,75)
+const houseArm = () => canvasTexture(128, 128, (g, w, h) => {
+  g.fillStyle = SKIN; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(36,26,32,.85)'; g.fillStyle = 'rgba(36,26,32,.85)'; g.lineWidth = 1.3; g.lineJoin = 'round';
+  g.save(); g.translate(w * 0.75, h * 0.8);
+  // casita
+  g.strokeRect(-6, -2, 12, 9);
+  g.beginPath(); g.moveTo(-8, -2); g.lineTo(0, -9); g.lineTo(8, -2); g.stroke();
+  g.fillRect(-1.5, 2, 3, 5);
+  // palmeras a los lados
+  for (const [x, lean] of [[-14, -1], [13, 1]]) {
+    g.beginPath(); g.moveTo(x, 7); g.quadraticCurveTo(x + lean * 2, -4, x + lean * 4, -14); g.stroke();
+    const tx = x + lean * 4, ty = -14;
+    for (const a of [-2.6, -2, -1.2, -0.5, 0.2]) {
+      g.beginPath(); g.moveTo(tx, ty);
+      g.quadraticCurveTo(tx + Math.cos(a) * 5, ty + Math.sin(a) * 5 - 2, tx + Math.cos(a) * 9, ty + Math.sin(a) * 9 + 3); g.stroke();
+    }
+  }
+  g.beginPath(); g.moveTo(-20, 8); g.lineTo(20, 8); g.stroke();   // suelo
+  g.restore();
+});
+
 // antebrazo de María: la mancha sombreada (blackwork punteado) a media altura
 const blotArm = () => canvasTexture(128, 128, (g, w, h) => {
   const R = rand(9);
   g.fillStyle = SKIN; g.fillRect(0, 0, w, h);
   // v = 0 abajo (codo) → 1 arriba (muñeca): la mancha va hacia la muñeca, por fuera
-  const cx = w * 0.5, cy = h * 0.32;
-  const blot = g.createRadialGradient(cx, cy, 2, cx, cy, 34);
+  const cx = w * 0.5, cy = h * 0.74;
+  const blot = g.createRadialGradient(cx, cy, 2, cx, cy, 20);
   blot.addColorStop(0, 'rgba(48,54,66,.85)'); blot.addColorStop(0.6, 'rgba(48,54,66,.5)'); blot.addColorStop(1, 'rgba(48,54,66,0)');
   g.save(); g.translate(cx, cy); g.scale(1.6, 0.8); g.translate(-cx, -cy);
-  g.fillStyle = blot; g.fillRect(cx - 40, cy - 40, 80, 80);
+  g.fillStyle = blot; g.fillRect(cx - 24, cy - 24, 48, 48);
   g.restore();
   g.fillStyle = 'rgba(36,40,50,.8)';
-  for (let i = 0; i < 260; i++) {
-    const a = R() * Math.PI * 2, r = Math.pow(R(), 0.7) * 30;
+  for (let i = 0; i < 120; i++) {
+    const a = R() * Math.PI * 2, r = Math.pow(R(), 0.7) * 17;
     g.beginPath(); g.arc(cx + Math.cos(a) * r * 1.6, cy + Math.sin(a) * r * 0.75, 0.6 + R() * 0.8, 0, Math.PI * 2); g.fill();
   }
 });
@@ -273,12 +295,12 @@ function place(m, a, b) {
 function torsoGeo(bust) {
   // perfil de cadera → cintura → pecho → hombros (en coordenadas de sentada)
   // tronco recto: cadera, cintura apenas marcada y hombros, sin pecho
-  const prof = [[0.0001, 0.47], [0.1, 0.478], [0.136, 0.53], [0.138, 0.58], [0.128, 0.65], [0.124, 0.72],
-    [0.128, 0.79], [0.132, 0.86], [0.142, 0.915], [0.136, 0.952],
+  const prof = [[0.0001, 0.47], [0.1, 0.478], [0.134, 0.53], [0.135, 0.58], [0.127, 0.65], [0.124, 0.72],
+    [0.125, 0.79], [0.128, 0.86], [0.14, 0.915], [0.134, 0.952],
     [0.1, 0.982], [0.05, 0.998], [0.0001, 1.004]];
   const curve = new THREE.SplineCurve(prof.map(([r, y]) => new THREE.Vector2(r, y)));
   const g = new THREE.LatheGeometry(curve.getPoints(48), 32);
-  g.scale(1.18, 1, 0.72);
+  g.scale(1.2, 1, 0.6);
   g.translate(0, 0, 0.07);
   return g;
 }
@@ -309,7 +331,7 @@ function hand(mat) {
 }
 
 // ── Cuerpo articulado (mirando hacia -z) ──
-function riggedBody({ top, sleeves, armMat, foreMats, thighs, shins, shoes, armsCrossed, face, bust = 0.012, legR = [0.07, 0.05, 0.045, 0.036] }) {
+function riggedBody({ top, sleeves, armMat, foreMats, upMats, thighs, shins, shoes, armsCrossed, face, bust = 0.012, legR = [0.07, 0.05, 0.045, 0.036] }) {
   const body = new THREE.Group();     // en el suelo
   const upper = new THREE.Group();    // tronco, cuello y cabeza: sube al levantarse
   body.add(upper);
@@ -355,7 +377,7 @@ function riggedBody({ top, sleeves, armMat, foreMats, thighs, shins, shoes, arms
     return { sx, thigh, shin, knee, shoe };
   });
   const armsList = [-1, 1].map(sx => {
-    const up = bone(0.038, 0.029, 0.26, armMat, 0.006, 0.4), fore = bone(0.03, 0.021, 0.235, (foreMats && foreMats[sx]) || armMat, 0.005, 0.25);
+    const up = bone(0.038, 0.029, 0.26, (upMats && upMats[sx]) || armMat, 0.006, 0.4), fore = bone(0.03, 0.021, 0.235, (foreMats && foreMats[sx]) || armMat, 0.005, 0.25);
     const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.029, 12, 8), armMat);
     const h = hand(skin);
     const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.046, 14, 10), sleeves || armMat);
@@ -536,7 +558,7 @@ function makeMaria() {
   const pants = lam('#ffffff', { map: camo() });
   pants.color.setRGB(1.0, 0.97, 0.94);   // que el camuflaje se lea con la luz del atardecer
   const rig = riggedBody({
-    top: phong('#ffffff', { map: tankTex() }), armMat: phong(SKIN), foreMats: { 1: phong('#ffffff', { map: blotArm() }) },
+    top: phong('#ffffff', { map: tankTex() }), armMat: phong(SKIN), foreMats: { 1: phong('#ffffff', { map: blotArm() }) }, upMats: { 1: phong('#ffffff', { map: houseArm() }) },
     thighs: pants, shins: pants, armsCrossed: true, bust: 0.01,
     shoes: () => sneaker(lam('#4a3024'), '#3a2a20'),
     face: { brows: '#1e130e', lips: '#b3272f', iris: '#3e2618', lashes: 5 },
