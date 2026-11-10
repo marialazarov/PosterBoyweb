@@ -15,6 +15,7 @@ const smooth = x => { x = clamp01(x); return x * x * (3 - 2 * x); };
 
 const SKIN = '#efc8b0';
 const LIFT = 0.36;            // cuánto sube la cadera al ponerse de pie
+const DROP = 0.06;            // sentada, un poco más abajo (sillas más bajitas)
 const DURATION = 2.6;         // segundos de levantarse → girarse → venir
 
 // ── Texturas pintadas ────────────────────────────────────────────
@@ -388,16 +389,16 @@ function riggedBody({ top, sleeves, armMat, thighs, shins, shoes, armsCrossed, f
    * wave: 0..1 saludo con el brazo de fuera (waveSide)
    */
   function pose({ b, stride = 0, walk = 0, wave = 0, waveSide = 1, t = 0 }) {
-    upper.position.y = LIFT * b;
+    upper.position.y = -DROP + (LIFT + DROP) * b;
     for (const L of legs) {
       const { sx } = L;
       const sw = Math.sin(stride + (sx > 0 ? 0 : Math.PI)) * walk;
       const lift = Math.max(0, Math.cos(stride + (sx > 0 ? 0 : Math.PI))) * walk;
-      mix(P.hip, V(sx * 0.075, 0.53, 0.03), V(sx * 0.075, 0.53 + LIFT, 0.03), b);
-      mix(P.knee, V(sx * 0.095, 0.52, -0.36), V(sx * 0.085, 0.5, 0.02), b);
+      mix(P.hip, V(sx * 0.075, 0.53 - DROP, 0.03), V(sx * 0.075, 0.53 + LIFT, 0.03), b);
+      mix(P.knee, V(sx * 0.095, 0.52 - DROP, -0.33), V(sx * 0.085, 0.5, 0.02), b);
       P.knee.z -= Math.sin(Math.PI * b) * 0.08 + sw * 0.07;
       P.knee.y += lift * 0.05;
-      mix(P.ankle, V(sx * 0.11, 0.09, -0.43), V(sx * 0.09, 0.09, 0.03), b);
+      mix(P.ankle, V(sx * 0.11, 0.09, -0.4), V(sx * 0.09, 0.09, 0.03), b);
       P.ankle.z -= sw * 0.12; P.ankle.y += lift * 0.07;
       place(L.thigh, P.hip, P.knee);
       place(L.shin, P.knee, P.ankle);
@@ -406,9 +407,9 @@ function riggedBody({ top, sleeves, armMat, thighs, shins, shoes, armsCrossed, f
     }
     for (const A of armsList) {
       const { sx } = A;
-      P.sh.set(sx * 0.165, 0.94 + LIFT * b, 0.08);
-      const seatEl = armsCrossed ? V(sx * 0.2, 0.74, -0.02) : V(sx * 0.23, 0.71, 0.02);
-      const seatHand = armsCrossed ? V(-sx * 0.08, 0.82, -0.11) : V(sx * 0.2, 0.62, -0.2);
+      P.sh.set(sx * 0.165, 0.94 - DROP + (LIFT + DROP) * b, 0.08);
+      const seatEl = armsCrossed ? V(sx * 0.2, 0.74 - DROP, -0.02) : V(sx * 0.23, 0.71 - DROP, 0.02);
+      const seatHand = armsCrossed ? V(-sx * 0.08, 0.82 - DROP, -0.11) : V(sx * 0.2, 0.62 - DROP, -0.2);
       const swing = Math.sin(stride + (sx > 0 ? Math.PI : 0)) * walk * 0.07;
       const breathe = Math.sin(t * 1.4) * 0.006;
       mix(P.el, seatEl, V(sx * 0.2, 0.69 + LIFT, 0.08 + swing), b);
@@ -534,7 +535,7 @@ function makeLuz() {
     pose(o);
     const b = o.b;
     hem.visible = b < 0.5;
-    hem.position.set(0, 0.42 + 0.2 * b, -0.36 + 0.3 * b);
+    hem.position.set(0, 0.36 + 0.26 * b, -0.33 + 0.27 * b);
     flare.visible = b >= 0.5;
     const len = 0.3 + 0.16 * smooth((b - 0.5) * 2);
     flare.scale.set(1, len, 0.85);
