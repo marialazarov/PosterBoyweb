@@ -7,6 +7,8 @@ import { createBay } from './bay.js';
 import { createBeach } from './beach.js';
 import { createProps } from './props.js';
 import { createCharacters } from './characters.js';
+import { createSparkles } from './sparkles.js';
+import { createOptions } from './options.js';
 
 THREE.ColorManagement.enabled = false;   // colores "tal cual"
 
@@ -33,9 +35,18 @@ export function createScene(canvas, { reducedMotion = false } = {}) {
   const fill = new THREE.DirectionalLight('#b897d6', 0.55);
   fill.position.set(2, 4, 10);
   scene.add(fill);
+  // luz de frente (desde la cámara) que se enciende al elegir personaje, para verle la cara
+  const key = new THREE.DirectionalLight('#ffe6d2', 0);
+  key.position.set(0, 0.6, 1);
+  camera.add(key, key.target);
+  key.target.position.set(0, 0, -1);
+  scene.add(camera);
 
   const props = createProps();
-  const parts = [createSky(), createSea(), createBay(), createBeach(), props, createCharacters()];
+  const sparkles = createSparkles();
+  const chars = createCharacters({ sparkles });
+  const options = createOptions({ sparkles });
+  const parts = [createSky(), createSea(), createBay(), createBeach(), props, chars, options, sparkles];
   parts.forEach(p => scene.add(p.object));
 
   // mirar un poco con el ratón
@@ -46,6 +57,7 @@ export function createScene(canvas, { reducedMotion = false } = {}) {
   });
 
   let camBack = 0;
+  let chosen = null, camShift = 0;
   function resize() {
     const w = innerWidth, h = innerHeight;
     renderer.setSize(w, h, false);
@@ -69,12 +81,15 @@ export function createScene(canvas, { reducedMotion = false } = {}) {
 
     pointer.sx += (pointer.x - pointer.sx) * Math.min(1, dt * 1.5);
     pointer.sy += (pointer.y - pointer.sy) * Math.min(1, dt * 1.5);
+    // al elegir una, la cámara se acerca un poquito hacia ella
+    camShift += ((chosen ? chars.frontX(chosen) * 0.6 : 0) - camShift) * Math.min(1, dt * 1.2);
+    key.intensity += ((chosen ? 1.1 : 0) - key.intensity) * Math.min(1, dt * 1.5);
     camera.position.set(
-      CAM.x + Math.sin(t * 0.13) * 0.12 * k + pointer.sx * 0.15,
+      CAM.x + camShift + Math.sin(t * 0.13) * 0.12 * k + pointer.sx * 0.15,
       CAM.y + camBack * 0.35 + Math.sin(t * 0.21) * 0.05 * k - pointer.sy * 0.08,
       CAM.z + camBack + Math.sin(t * 0.09) * 0.1 * k,
     );
-    look.set(LOOK.x + pointer.sx * 1.6, LOOK.y - pointer.sy * 0.8, LOOK.z);
+    look.set(LOOK.x + camShift * 1.5 + pointer.sx * 1.6, LOOK.y - pointer.sy * 0.8, LOOK.z);
     camera.lookAt(look);
 
     for (const p of parts) p.update(t, camera, dt);
@@ -83,24 +98,56 @@ export function createScene(canvas, { reducedMotion = false } = {}) {
   }
   requestAnimationFrame(frame);
 
-  // clic (o toque) en la radio de la mesa
+  // clic (o toque) en la radio, en un personaje o en una opción
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
-  const onRadio = [];
-  function overRadio(e) {
-    if (e.target !== canvas) return false;
+  props.radioHit.userData.pick = { type: 'radio' };
+  let mode = 'intro';
+  const pickFns = [], hoverFns = [], arriveFns = [];
+  function pick(e) {
+    if (e.target !== canvas) return null;
     ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
-    return raycaster.intersectObject(props.radioHit, false).length > 0;
+    const targets = [props.radioHit];
+    if (mode === 'menu') targets.push(...chars.hits);
+    if (mode === 'char') targets.push(...options.hits);
+    const hit = raycaster.intersectObjects(targets, false)[0];
+    return hit ? hit.object.userData.pick : null;
   }
-  window.addEventListener('pointermove', e => { canvas.style.cursor = overRadio(e) ? 'pointer' : ''; });
-  window.addEventListener('click', e => { if (overRadio(e)) onRadio.forEach(fn => fn()); });
+  let lastHover = null;
+  window.addEventListener('pointermove', e => {
+    const p = pick(e);
+    canvas.style.cursor = p ? 'pointer' : '';
+    const id = p && p.type !== 'radio' ? p.type + ':' + p.id : null;
+    if (id !== lastHover) { lastHover = id; hoverFns.forEach(fn => fn(p && p.type !== 'radio' ? p : null)); }
+  });
+  window.addEventListener('click', e => { const p = pick(e); if (p) pickFns.forEach(fn => fn(p)); });
+
+  chars.onArrive(name => {
+    options.show(name, out => chars.headWorld(name, out));
+    arriveFns.forEach(fn => fn(name, options.keys()));
+  });
 
   return {
-    /** Llama a fn cuando se toca la radio. */
-    onRadioClick(fn) { onRadio.push(fn); },
+    /** 'intro' | 'menu' | 'char' | 'panel': qué se puede tocar en la escena. */
+    setMode(m) { mode = m; },
+    /** fn({type:'radio'|'char'|'option', id}) al tocar algo de la escena. */
+    onPick(fn) { pickFns.push(fn); },
+    /** fn({type, id} | null) al pasar el ratón por un personaje u opción. */
+    onHover(fn) { hoverFns.push(fn); },
+    /** fn(name, keys) cuando la elegida ha llegado y le salen las opciones. */
+    onArrive(fn) { arriveFns.push(fn); },
     /** Enciende o apaga la radio en la escena (luces del dial). */
     setRadio(on) { props.setRadio(on); },
+    highlightChar(name) { chars.highlight(name); },
+    /** La elegida se levanta y viene (null: se vuelve a sentar). */
+    chooseChar(name) {
+      chosen = name;
+      options.hide();
+      chars.select(name, camera);
+      props.setTapHint(!name);
+    },
+    highlightOption(key) { options.highlight(key); },
     /** Ilumina un elemento de la escena: 'town' | 'lamp' | 'island' | null */
     setFocus(key) { parts.forEach(p => p.setFocus && p.setFocus(key)); },
   };

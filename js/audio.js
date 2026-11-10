@@ -8,6 +8,8 @@ const SONG_GAIN = 0.9;
 const songData = fetch(SONG_URL).then(r => r.arrayBuffer()).catch(() => null);
 
 let ctx, master, radioGain;
+// para probar la web sin que suene nada: index.html?silencio
+const SILENT = new URLSearchParams(location.search).has('silencio');
 let started = false;
 let radioOn = false;
 
@@ -24,9 +26,17 @@ function noiseBuffer(seconds, brown) {
 }
 
 export function start() {
-  if (started) return;
+  if (started) { if (ctx.state === 'suspended') ctx.resume(); return; }
   started = true;
   ctx = new (window.AudioContext || window.webkitAudioContext)();
+  // los navegadores no dejan sonar nada hasta que la persona toca o pulsa algo:
+  // en cuanto lo hace, el mar empieza a sonar
+  if (ctx.state === 'suspended') {
+    const wake = () => ctx.resume().then(() => {
+      if (ctx.state === 'running') ['pointerdown', 'keydown', 'touchstart'].forEach(ev => removeEventListener(ev, wake, true));
+    });
+    ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, wake, true));
+  }
   master = ctx.createGain();
   master.gain.value = 0;
   master.connect(ctx.destination);
@@ -53,7 +63,7 @@ export function start() {
   wind.connect(bp).connect(windGain).connect(master);
   wind.start(); gust.start();
 
-  master.gain.setTargetAtTime(0.8, ctx.currentTime, 1.5);
+  master.gain.setTargetAtTime(SILENT ? 0 : 0.8, ctx.currentTime, 1.5);
 
   // la radio: un poco de color de altavoz pequeño, pero que se oiga bien
   radioGain = ctx.createGain(); radioGain.gain.value = 0;
@@ -98,7 +108,7 @@ function click() {
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.25, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
-  src.connect(f).connect(g).connect(ctx.destination);
+  src.connect(f).connect(g).connect(SILENT ? master : ctx.destination);
   src.start(t);
 }
 
@@ -131,7 +141,7 @@ export function blip(kind = 'move') {
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(0.07, t + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
-    o.connect(g).connect(ctx.destination);
+    o.connect(g).connect(SILENT ? master : ctx.destination);
     o.start(t); o.stop(t + 0.5);
   });
 }

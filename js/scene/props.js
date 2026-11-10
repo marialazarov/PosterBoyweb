@@ -35,7 +35,7 @@ function makeChair() {
 }
 
 // Radio de transistores pequeñita. El frente mira hacia +z (hacia la cámara).
-function makeRadio() {
+export function makeRadio() {
   const g = new THREE.Group();
   const W = 0.15, H = 0.095, D = 0.05;
   const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), lam('#7fb2a2'));
@@ -74,7 +74,7 @@ function makeRadio() {
   const handle = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.005, 6, 16, Math.PI), lam('#2a2422'));
   handle.position.set(0, H / 2, -0.005);
   g.add(handle);
-  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.0018, 0.0028, 0.26, 5).translate(0, 0.13, 0), lam('#c9c4c0'));
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.0016, 0.0026, 0.11, 5).translate(0, 0.055, 0), lam('#c9c4c0'));
   antenna.position.set(-W / 2 + 0.015, H / 2, -0.015);
   antenna.rotation.set(-0.25, 0, 0.55);
   g.add(antenna);
@@ -171,6 +171,23 @@ export function createProps() {
   group.add(radio.object);
   let radioOn = false, radioLevel = 0;
 
+  // «tap here» discreto encima de la radio, como en un videojuego
+  const tapTex = canvasTexture(256, 128, (c, w) => {
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.shadowColor = 'rgba(30,14,40,.8)'; c.shadowBlur = 8;
+    c.fillStyle = '#fffbf0';
+    c.font = '500 34px Futura, "Futura PT", Jost, sans-serif';
+    c.fillText('tap here', w / 2, 40);
+    c.beginPath(); c.moveTo(w / 2 - 11, 82); c.lineTo(w / 2 + 11, 82); c.lineTo(w / 2, 98); c.closePath(); c.fill();
+  });
+  const tap = new THREE.Sprite(new THREE.SpriteMaterial({ map: tapTex, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false }));
+  tap.scale.set(0.32, 0.16, 1);
+  tap.renderOrder = 10;
+  const TAP_Y = ty + 0.47 + 0.3;
+  tap.position.set(radio.object.position.x - 0.12, TAP_Y, radio.object.position.z + 0.05);
+  group.add(tap);
+  let tapShow = 0, tapVisible = true;
+
   // latas y piedras sobre la mesa
   const can = new THREE.CylinderGeometry(0.033, 0.033, 0.12, 10);
   const green = lam('#2c5a36');
@@ -186,12 +203,13 @@ export function createProps() {
 
   // cañas de pescar clavadas entre las piedras, a la izquierda
   const rods = [];
-  const rodMat = lam('#8e2a22');
+  const rodMats = [lam('#8e2a22'), lam('#e6c94a')];
   const lineMat = new THREE.LineBasicMaterial({ color: '#e8d9e6', transparent: true, opacity: 0.5 });
   [
-    { base: [-1.75, -0.35], lean: [-0.35, -0.9], len: 2.7, end: [-4.5, -16] },
-    { base: [-1.4, -0.75], lean: [0.05, -0.75], len: 3.0, end: [-1.2, -18] },
-  ].forEach(cfg => {
+    { base: [-1.6, -0.55], lean: [-0.3, -0.9], len: 2.7, end: [-4.5, -16] },   // junto a María
+    { base: [1.2, -0.85], lean: [0.2, -0.8], len: 2.8, end: [3.2, -17] },      // delante de Luz
+  ].forEach((cfg, ci) => {
+    const rodMat = rodMats[ci];
     const pivot = new THREE.Group();
     const y = groundHeight(cfg.base[0], cfg.base[1]);
     pivot.position.set(cfg.base[0], y, cfg.base[1]);
@@ -221,6 +239,8 @@ export function createProps() {
     setFocus(key) { lampTarget = key === 'lamp' ? 1 : 0; },
     radioHit: radio.hit,
     setRadio(on) { radioOn = on; },
+    /** Muestra u oculta el «tap here» (p. ej. mientras una está de pie). */
+    setTapHint(on) { tapVisible = on; },
     update(t, _cam, dt) {
       // radio: el dial se enciende al sonar; apagada, la luz parpadea despacio para que la toques
       radioLevel += ((radioOn ? 1 : 0) - radioLevel) * Math.min(1, dt * 6);
@@ -230,6 +250,10 @@ export function createProps() {
       radio.ledGlow.scale.setScalar(radioOn ? 0.09 : 0.06 + 0.03 * invite);
       radio.led.material.color.set(radioOn ? '#ffb070' : '#ff5a3c');
       radio.knob.rotation.x = radioLevel * 1.4;
+      tapShow += (((tapVisible && !radioOn) ? 1 : 0) - tapShow) * Math.min(1, dt * 3);
+      tap.visible = tapShow > 0.01;
+      tap.material.opacity = tapShow * (0.72 + 0.2 * Math.sin(t * 3));
+      tap.position.y = TAP_Y + Math.abs(Math.sin(t * 3)) * 0.015;
 
       // lámpara: parpadeo suave + énfasis desde el menú
       lampBoost += (lampTarget - lampBoost) * Math.min(1, dt * 3);

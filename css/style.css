@@ -100,7 +100,15 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   top: 39vh;
   transition: opacity .9s var(--ease) .3s, transform .9s var(--ease) .3s;
 }
-.menu ul { list-style: none; display: grid; justify-items: center; gap: .1em; }
+.menu__title {
+  text-align: center;
+  font-size: clamp(15px, 1.4vw, 19px);
+  letter-spacing: .32em;
+  color: rgba(255, 251, 240, .7);
+  text-shadow: var(--lift);
+  margin-bottom: .7em;
+}
+.menu ul { list-style: none; display: flex; justify-content: center; gap: clamp(28px, 6vw, 110px); }
 
 .menu button {
   position: relative;
@@ -142,8 +150,29 @@ body[data-state="intro"] .menu  { opacity: 0; transform: translateY(14px); point
 body[data-state="intro"] .logo  { transform: translateY(8vh) scale(1.08); }
 body:not([data-state="intro"]) .press { opacity: 0; animation: none; }
 
+body[data-state="char"] .menu,
 body[data-state="panel"] .menu,
 body[data-state="panel"] .logo { opacity: 0; pointer-events: none; }
+body[data-state="intro"] #ui .menu button,
+body[data-state="char"] #ui .menu button,
+body[data-state="panel"] #ui .menu button { pointer-events: none; }
+#ui .char-back { pointer-events: none; }
+body[data-state="char"] #ui .char-back { pointer-events: auto; }
+
+/* ── Volver a elegir ───────────────────────────────────────────── */
+
+.char-back {
+  position: absolute;
+  top: 22px; left: 22px;
+  padding: 6px 14px; border-radius: 999px;
+  font-size: 16px; letter-spacing: .06em;
+  text-shadow: var(--lift);
+  opacity: 0; pointer-events: none;
+  outline: none;
+  transition: opacity .6s, background .2s;
+}
+body[data-state="char"] .char-back { opacity: .8; pointer-events: auto; transition-delay: 1.2s, 0s; }
+.char-back:hover, .char-back:focus-visible { background: rgba(255,255,255,.12); opacity: 1; }
 
 /* ── Ventana de sección ────────────────────────────────────────── */
 
