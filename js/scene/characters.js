@@ -97,7 +97,7 @@ const blotArm = () => canvasTexture(128, 128, (g, w, h) => {
   const R = rand(9);
   g.fillStyle = SKIN; g.fillRect(0, 0, w, h);
   // v = 0 abajo (codo) → 1 arriba (muñeca): la mancha va hacia la muñeca, por fuera
-  const cx = w * 0.5, cy = h * 0.74;
+  const cx = w * 0.5, cy = h * 0.14;   // arriba de la muñeca
   const blot = g.createRadialGradient(cx, cy, 2, cx, cy, 20);
   blot.addColorStop(0, 'rgba(48,54,66,.85)'); blot.addColorStop(0.6, 'rgba(48,54,66,.5)'); blot.addColorStop(1, 'rgba(48,54,66,0)');
   g.save(); g.translate(cx, cy); g.scale(1.6, 0.8); g.translate(-cx, -cy);
