@@ -14,7 +14,7 @@ THREE.ColorManagement.enabled = false;   // colores "tal cual"
 export function createScene(canvas, { reducedMotion = false } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
-  renderer.setPixelRatio(1);   // un pelín suave, sin llegar a pixelado
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR);
