@@ -13,9 +13,9 @@ const SECTIONS = {
         <li><span>--.--.--</span><span>Ciudad · Sala</span><span>pronto</span></li>
       </ul>`,
   },
-  album: {
+  musica: {
     tag: '02',
-    title: 'álbum',
+    title: 'música',
     html: `
       <p class="note">// tracklist (contenido de ejemplo)</p>
       <ul class="rows">
@@ -23,15 +23,16 @@ const SECTIONS = {
         ${[2, 3, 4, 5].map(n => `<li><span>0${n}</span><span>— — —</span><span>--:--</span></li>`).join('')}
       </ul>`,
   },
-  mapa: {
+  merch: {
     tag: '03',
-    title: 'mapa',
+    title: 'merchandising',
     html: `
-      <p class="note">// elige personaje</p>
-      <div class="chars">
-        <button type="button" class="char">Luz</button>
-        <button type="button" class="char">María</button>
-      </div>`,
+      <p class="note">// tienda (contenido de ejemplo)</p>
+      <ul class="rows">
+        <li><span>camiseta</span><span>— — —</span><span>pronto</span></li>
+        <li><span>vinilo</span><span>— — —</span><span>pronto</span></li>
+        <li><span>póster</span><span>— — —</span><span>pronto</span></li>
+      </ul>`,
   },
 };
 
