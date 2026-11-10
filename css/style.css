@@ -190,7 +190,7 @@ body[data-state="panel"] .hints { opacity: 0; pointer-events: none; }
   padding: 28px 30px 22px;
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, .3);
-  background: linear-gradient(180deg, rgba(255,230,210,.18), rgba(90,60,130,.22));
+  background: linear-gradient(180deg, rgba(60,30,70,.42), rgba(40,22,60,.55));
   backdrop-filter: blur(16px) saturate(1.3);
   -webkit-backdrop-filter: blur(16px) saturate(1.3);
   box-shadow: 0 30px 80px rgba(14, 6, 20, .55), inset 0 1px 0 rgba(255,255,255,.45);
@@ -203,7 +203,7 @@ body[data-state="panel"] .hints { opacity: 0; pointer-events: none; }
 .panel__tag { font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--warm); text-shadow: var(--glow); }
 .panel__title { font-family: var(--script); font-weight: 400; font-size: clamp(38px, 5.5vw, 58px); color: var(--pink); text-shadow: 3px 3px 0 var(--rose); }
 
-.panel__body { font-size: 17px; line-height: 1.5; }
+.panel__body { font-size: 17px; line-height: 1.5; text-shadow: 0 1px 2px rgba(20,10,30,.6); }
 .panel__body .note {
   font-family: var(--serif); font-style: italic; font-size: 17px; letter-spacing: .04em;
   color: var(--ink-soft);
@@ -218,7 +218,7 @@ body[data-state="panel"] .hints { opacity: 0; pointer-events: none; }
   background: rgba(255,255,255,.07);
   border: 1px solid rgba(255,255,255,.1);
 }
-.rows li span:first-child { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--pink); }
+.rows li span:first-child { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--ink); }
 .rows li span:last-child  { font-family: var(--serif); font-style: italic; font-size: 16px; color: var(--ink-soft); }
 
 .chars { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
