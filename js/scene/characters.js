@@ -255,11 +255,21 @@ function photoBody(mat, S, o) {
   body.add(upper);
 
   // tronco: de la cadera (0.47) a los hombros (1.0), en coordenadas de sentada
-  const tg = new THREE.CylinderGeometry(o.torso[0], o.torso[1], 0.53, 8, 3);
+  // tronco recto (sin cadera ni pecho), redondo y suave, con los hombros
+  // redondeados arriba para que la foto no parezca pegada en un bloque
+  const prof = [[0.13, 0.47], [0.13, 0.6], [0.13, 0.75], [0.13, 0.88], [0.128, 0.93], [0.118, 0.965],
+    [0.09, 0.99], [0.05, 1.002], [0.0001, 1.006]];
+  const curve = new THREE.SplineCurve(prof.map(([r, y]) => new THREE.Vector2(r, y - 0.738)));
+  const tg = new THREE.LatheGeometry(curve.getPoints(28), 20);
   projectTube(tg, S.torso, S.torsoBack, -1);
-  tg.scale(1, 1, 0.62);
-  tg.translate(0, 0.735, 0.07);
-  const torso = new THREE.Mesh(tg, mat);
+  tg.scale(o.torso[0] / 0.13, 1, 0.62 * o.torso[0] / 0.13);
+  tg.translate(0, 0.738, 0.07);
+  tg.computeVertexNormals();
+  const torsoMat = mat.clone();
+  torsoMat.flatShading = false;
+  torsoMat.emissive.multiplyScalar(0.75);   // menos brillo propio: que se note el volumen
+  torsoMat.color.setScalar(1.15);
+  const torso = new THREE.Mesh(tg, torsoMat);
   upper.add(torso);
 
   const neck = bone(0.045, 0.04, 0.09, skinMat, S.neck, null, 6);
@@ -313,8 +323,17 @@ function photoBody(mat, S, o) {
     const hand = bone(0.03, 0.026, 0.085, skinMat, S['hand' + k], null, 5);
     // hombro: redondo y metido en el tronco, con piel de un poco más abajo del borde
     const [sxp, syp] = S['up' + k].A;
-    const shoulder = joint(A[0] * 1.08, skinMat, around([sxp + sx * 4, syp + 22], S['up' + k].w * 0.55), 2);
-    shoulder.scale.set(0.95, 1.1, 0.95);
+    // hombro grande que tapa el corte de arriba del brazo y llega al tronco
+    const shoulderAt = S['shoulder' + k] || [sxp + sx * 4, syp + 22];   // un trozo de piel limpia
+    const shoulder = joint(A[0] * 1.35, skinMat, around(shoulderAt, S.shoulderR ? 14 : 5), 2);
+    shoulder.scale.set(1.05, 0.95, 0.9);
+    if (o.noShoulderBall) {
+      // sin bola: solo remata la punta del brazo, del mismo grosor y con la misma foto
+      shoulder.geometry.dispose();
+      shoulder.geometry = projectRect(new THREE.SphereGeometry(A[0] * 1.02, 14, 10), around([sxp, syp + 12], S['up' + k].w * 0.9));
+      shoulder.scale.set(1, 0.8, 1);
+      shoulder.userData.flush = true;
+    }
     body.add(up, fore, elbow, hand, shoulder);
     return { sx, up, fore, elbow, hand, shoulder };
   });
@@ -347,13 +366,13 @@ function photoBody(mat, S, o) {
     }
     for (const Ar of armsList) {
       const { sx } = Ar;
-      P.sh.set(sx * 0.165, 0.94 - DROP + (LIFT + DROP) * b, 0.08);
+      P.sh.set(sx * (o.shoulderX ?? 0.165), (o.shoulderY ?? 0.94) - DROP + (LIFT + DROP) * b, 0.08);
       const seatEl = armsCrossed ? V(sx * 0.2, 0.74 - DROP, -0.02) : V(sx * 0.23, 0.71 - DROP, 0.02);
       const seatHand = armsCrossed ? V(-sx * 0.08, 0.82 - DROP, -0.11) : V(sx * 0.2, 0.62 - DROP, -0.2);
       const swing = Math.sin(stride + (sx > 0 ? Math.PI : 0)) * walk * 0.07;
       const breathe = Math.sin(t * 1.4) * 0.006;
-      mix(P.el, seatEl, V(sx * 0.2, 0.69 + LIFT, 0.08 + swing), b);
-      mix(P.hand, seatHand, V(sx * 0.215, 0.46 + LIFT + breathe, 0.05 + swing * 2), b);
+      mix(P.el, seatEl, V(sx * (o.elbowX ?? 0.2), 0.69 + LIFT, 0.08 + swing), b);
+      mix(P.hand, seatHand, V(sx * (o.handX ?? 0.215), 0.46 + LIFT + breathe, 0.05 + swing * 2), b);
       if (wave > 0 && sx === waveSide) {
         P.el.lerp(V(sx * 0.29, 0.82 + LIFT, 0.05), wave);
         P.hand.lerp(V(sx * (0.31 + Math.sin(t * 9) * 0.05), 1.03 + LIFT, 0.01), wave);
@@ -361,7 +380,8 @@ function photoBody(mat, S, o) {
       place(Ar.up, P.sh, P.el);
       place(Ar.fore, P.el, P.hand);
       Ar.elbow.position.copy(P.el);
-      Ar.shoulder.position.copy(P.sh).add(tmp.set(-sx * 0.02, -0.012, 0));
+      if (Ar.shoulder.userData.flush) Ar.shoulder.position.copy(P.sh);
+      else Ar.shoulder.position.copy(P.sh).add(tmp.set(-sx * 0.014, -0.004, 0));
       // mano: sigue la dirección del antebrazo
       dir.subVectors(P.hand, P.el).normalize();
       place(Ar.hand, P.hand, tmp.copy(P.hand).addScaledVector(dir, 0.085));
@@ -420,6 +440,7 @@ const MARIA = {
   foreR: { A: [318, 495], B: [312, 590], w: 12 },
   handR: { A: [314, 528], B: [313, 560], w: 8 },          // manos: piel lisa, sin la mancha de la muñeca
   upL: { A: [527, 300], B: [545, 495], w: 18 },
+  shoulderR: [330, 345], shoulderL: [530, 345],             // piel del hombro, sin tatuaje
   foreL: { A: [545, 495], B: [550, 590], w: 12 },
   handL: { A: [549, 555], B: [550, 590], w: 8 },
   thighR: { A: [385, 610], B: [350, 860], w: 55 },
@@ -454,15 +475,19 @@ function makeMaria() {
   });
   const mat = photoMat(tex.body);
   const rig = photoBody(mat, MARIA, {
+    shoulderX: 0.14, shoulderY: 0.925, noShoulderBall: true,   // el brazo sale del tronco, sin bola
+    elbowX: 0.17, handX: 0.2,              // brazos pegados al cuerpo, como en la foto
     skin: '#d9a487', face: { brows: '#1e130e', lips: '#b3272f', iris: '#3e2618', lashes: 6 },
     torso: [0.16, 0.155], legs: [0.115, 0.105, 0.105, 0.125], arms: [0.04, 0.032, 0.03, 0.024],
     shoe: [0.1, 0.22], armsCrossed: true,
   });
   tex.onSkin = rig.setSkin;
   // cintura del pantalón
-  const wg = new THREE.CylinderGeometry(0.15, 0.16, 0.1, 8);
+  const wg = new THREE.CylinderGeometry(0.15, 0.16, 0.1, 20);
   projectTube(wg, { A: [432, 590], B: [432, 625], w: 92 }, null, -1);
-  const waist = new THREE.Mesh(wg, mat);
+  const waistMat = mat.clone();
+  waistMat.flatShading = false;
+  const waist = new THREE.Mesh(wg, waistMat);
   waist.position.set(0, 0.52, 0.06); waist.scale.z = 0.8;
   rig.upper.add(waist);
 
@@ -589,7 +614,8 @@ function makeLuz() {
   const sleeveMat = new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: new THREE.Color(0.55, 0.55, 0.55) });
   const trim = lam('#111111');
   const sleeves = rig.armsList.map(A => {
-    const sl = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.05, 0.1, 10), sleeveMat);
+    const sl = new THREE.Mesh(new THREE.CylinderGeometry(0.053, 0.05, 0.1, 12), sleeveMat);
+    sl.userData.len = 0.1;                 // place() la estira según esto
     const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.0028, 4, 16), trim);   // bordecito negro
     cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.05;
     sl.add(cuff);
@@ -802,8 +828,6 @@ export function createCharacters({ sparkles } = {}) {
 
         p.pose({ b, stride, walk, wave, waveSide: p.waveSide, t: t + p.phase });
 
-        // respiración
-        p.torso.scale.y = 1 + Math.sin(t * 1.4 + p.phase) * 0.012;
         // sentada mira despacio a los lados; de pie, mira a la cámara con la cabeza ladeada
         const look = Math.sin(t * 0.11 + p.phase) * 0.5 + 0.5;
         const seatedLook = p.lookBias * Math.pow(look, 3) + Math.sin(t * 0.4 + p.phase) * 0.04;
