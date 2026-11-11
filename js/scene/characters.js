@@ -1,9 +1,10 @@
 // Luz y María: sentadas de espaldas mirando el mar. Al elegir una, se levanta,
 // sale de la silla, se gira hacia la cámara y saluda.
-// Estilo: personajes de videojuego de principios de los 2000 (formas suaves,
-// texturas pintadas a mano, piel con un poco de brillo).
+// Estilo PS1 «trashy»: cuerpos de pocos polígonos con su foto de cuerpo entero
+// pegada encima (proyectada de frente), píxeles gordos y sombreado facetado.
+// La espalda es inventada: se rellena con trozos de pelo y ropa de la misma foto.
 import * as THREE from 'three';
-import { canvasTexture, rand, glowSprite } from './util.js';
+import { glowSprite, rand, canvasTexture } from './util.js';
 import { groundHeight } from './beach.js';
 import { CHAIR_X, CHAIR_Z } from './props.js';
 
@@ -13,174 +14,58 @@ const phong = (c, extra = {}) => new THREE.MeshPhongMaterial({ color: c, shinine
 const clamp01 = x => Math.min(1, Math.max(0, x));
 const smooth = x => { x = clamp01(x); return x * x * (3 - 2 * x); };
 
-const SKIN = '#efc8b0';
 const LIFT = 0.36;            // cuánto sube la cadera al ponerse de pie
 const DROP = 0.03;            // sentada, un poco más abajo (sillas más bajitas)
 const DURATION = 2.6;         // segundos de levantarse → girarse → venir
+const SEG = 7;                // lados de cada tubo del cuerpo (pocos = más PS1)
 
-// ── Texturas pintadas ────────────────────────────────────────────
+// ── La foto ──────────────────────────────────────────────────────
+// Las zonas de cada parte se miden en píxeles de la foto original (864×1184);
+// la textura es la foto a mitad de tamaño, con píxeles sin suavizar.
+const IMG = { w: 864, h: 1184 };
 
-// pliegues verticales suaves, como la ropa ancha de los juegos de PS2
-function folds(g, w, h, n, alpha, R) {
-  for (let i = 0; i < n; i++) {
-    const x = R() * w, wid = 3 + R() * 10;
-    const gr = g.createLinearGradient(x - wid, 0, x + wid, 0);
-    gr.addColorStop(0, 'rgba(0,0,0,0)');
-    gr.addColorStop(0.5, `rgba(0,0,0,${alpha * (0.5 + R())})`);
-    gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = gr; g.fillRect(x - wid, 0, wid * 2, h);
-  }
+// La foto es solo el boceto: de ella salen los colores y los estampados,
+// pero simplificados (pocos píxeles, pocos colores), como una textura pintada
+// de videojuego. La cara se dibuja encima, de muñeco.
+const canvas2d = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+function pixelTex(canvas) {
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;                  // suave, sin píxeles gordos
+  return tex;
+}
+// reduce la foto con suavizado
+function shrink(src, sx, sy, sw, sh, w, h) {
+  const c = canvas2d(w, h), g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.filter = 'blur(1px)';               // quita el detalle de foto (poros, arrugas)
+  g.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
+  g.filter = 'none';
+  return c;
 }
 
-const plaid = (rx = 1, ry = 1) => {
-  const t = canvasTexture(64, 64, (g) => {
-    g.fillStyle = '#5e665a'; g.fillRect(0, 0, 64, 64);
-    g.fillStyle = 'rgba(30,36,30,.6)'; g.fillRect(0, 20, 64, 12); g.fillRect(20, 0, 12, 64);
-    g.fillStyle = 'rgba(30,36,30,.35)'; g.fillRect(0, 50, 64, 4); g.fillRect(50, 0, 4, 64);
-    g.fillStyle = 'rgba(195,200,185,.35)'; g.fillRect(0, 44, 64, 2); g.fillRect(44, 0, 2, 64);
-  }, { repeat: true });
-  t.repeat.set(rx, ry);
-  return t;
-};
+/**
+ * Texturas de una chica: cuerpo (foto simplificada) y cabeza (pelo de la foto
+ * pixelado + cara de muñeco pintada). cfg.covers tapa las manos de la foto
+ * con trozos de ropa de al lado: [x, y, w, h, dx] (copia desde x+dx).
+ */
+function dollTextures(url, cfg) {
+  const bodyC = canvas2d(432, 592);
+  const body = pixelTex(bodyC);
+  const img = new Image();
+  img.onload = () => {
+    // foto de trabajo a tamaño original, con las manos tapadas
+    const full = canvas2d(IMG.w, IMG.h), fg = full.getContext('2d');
+    fg.drawImage(img, 0, 0, IMG.w, IMG.h);
+    for (const [x, y, w, h, dx] of cfg.covers || []) fg.drawImage(full, x + dx, y, w, h, x, y, w, h);
+    bodyC.getContext('2d').drawImage(shrink(full, 0, 0, IMG.w, IMG.h, 432, 592), 0, 0);
+    body.needsUpdate = true;
+  };
+  img.src = url;
+  return { body };
+}
 
-const camo = () => {
-  const t = canvasTexture(256, 256, (g, w, h) => {
-    const R = rand(5);
-    g.fillStyle = '#7d6a44'; g.fillRect(0, 0, w, h);
-    for (const c of ['#cfb27c', '#5a3a1e', '#1c140e', '#5f5a30', '#cfb27c', '#4a3018']) {
-      g.fillStyle = c;
-      for (let i = 0; i < 9; i++) {
-        // manchas alargadas e irregulares (woodland), que también cruzan el borde
-        const x = R() * w, y = R() * h, sx = 22 + R() * 26, sy = 7 + R() * 9, rot = (R() - 0.5) * 1.2;
-        for (const [ox, oy] of [[0, 0], [w, 0], [-w, 0], [0, h], [0, -h]]) {
-          g.save(); g.translate(x + ox, y + oy); g.rotate(rot);
-          g.beginPath();
-          for (let k = 0; k <= 14; k++) {
-            const a = (k / 14) * Math.PI * 2, rr = 0.55 + R() * 0.6;
-            const px = Math.cos(a) * sx * rr, py = Math.sin(a) * sy * rr + Math.sin(a * 3) * 4;
-            k ? g.lineTo(px, py) : g.moveTo(px, py);
-          }
-          g.fill(); g.restore();
-        }
-      }
-    }
-    folds(g, w, h, 9, 0.12, R);
-  }, { repeat: true });
-  t.repeat.set(2, 2);
-  return t;
-};
-
-// brazo derecho de María: casita con dos palmeras junto al hombro (por fuera, u≈0,75)
-const houseArm = () => canvasTexture(128, 128, (g, w, h) => {
-  g.fillStyle = SKIN; g.fillRect(0, 0, w, h);
-  g.strokeStyle = 'rgba(36,26,32,.85)'; g.fillStyle = 'rgba(36,26,32,.85)'; g.lineWidth = 1.3; g.lineJoin = 'round';
-  g.save(); g.translate(w * 0.75, h * 0.8);
-  // casita
-  g.strokeRect(-6, -2, 12, 9);
-  g.beginPath(); g.moveTo(-8, -2); g.lineTo(0, -9); g.lineTo(8, -2); g.stroke();
-  g.fillRect(-1.5, 2, 3, 5);
-  // palmeras a los lados
-  for (const [x, lean] of [[-14, -1], [13, 1]]) {
-    g.beginPath(); g.moveTo(x, 7); g.quadraticCurveTo(x + lean * 2, -4, x + lean * 4, -14); g.stroke();
-    const tx = x + lean * 4, ty = -14;
-    for (const a of [-2.6, -2, -1.2, -0.5, 0.2]) {
-      g.beginPath(); g.moveTo(tx, ty);
-      g.quadraticCurveTo(tx + Math.cos(a) * 5, ty + Math.sin(a) * 5 - 2, tx + Math.cos(a) * 9, ty + Math.sin(a) * 9 + 3); g.stroke();
-    }
-  }
-  g.beginPath(); g.moveTo(-20, 8); g.lineTo(20, 8); g.stroke();   // suelo
-  g.restore();
-});
-
-// antebrazo de María: la mancha sombreada (blackwork punteado) a media altura
-const blotArm = () => canvasTexture(128, 128, (g, w, h) => {
-  const R = rand(9);
-  g.fillStyle = SKIN; g.fillRect(0, 0, w, h);
-  // v = 0 abajo (codo) → 1 arriba (muñeca): la mancha va hacia la muñeca, por fuera
-  const cx = w * 0.5, cy = h * 0.14;   // arriba de la muñeca
-  const blot = g.createRadialGradient(cx, cy, 2, cx, cy, 20);
-  blot.addColorStop(0, 'rgba(48,54,66,.85)'); blot.addColorStop(0.6, 'rgba(48,54,66,.5)'); blot.addColorStop(1, 'rgba(48,54,66,0)');
-  g.save(); g.translate(cx, cy); g.scale(1.6, 0.8); g.translate(-cx, -cy);
-  g.fillStyle = blot; g.fillRect(cx - 24, cy - 24, 48, 48);
-  g.restore();
-  g.fillStyle = 'rgba(36,40,50,.8)';
-  for (let i = 0; i < 120; i++) {
-    const a = R() * Math.PI * 2, r = Math.pow(R(), 0.7) * 17;
-    g.beginPath(); g.arc(cx + Math.cos(a) * r * 1.6, cy + Math.sin(a) * r * 0.75, 0.6 + R() * 0.8, 0, Math.PI * 2); g.fill();
-  }
-});
-
-// camiseta de tirantes blanca (María). Lathe: u da la vuelta (0,5 = delante), v sube.
-const PINK = '#f5d5dd';
-const tankTex = () => canvasTexture(256, 256, (g, w, h) => {
-  g.fillStyle = PINK; g.fillRect(0, 0, w, h);
-  folds(g, w, h, 8, 0.05, rand(3));
-  // canalé
-  g.fillStyle = 'rgba(0,0,0,.04)';
-  for (let x = 0; x < w; x += 4) g.fillRect(x, 0, 1.5, h);
-  // hombros y escote al aire, con los tirantes
-  g.fillStyle = SKIN;
-  g.fillRect(0, 0, w, h * 0.1);
-  g.beginPath(); g.ellipse(w * 0.5, 0, w * 0.085, h * 0.25, 0, 0, Math.PI * 2); g.fill();
-  g.beginPath(); g.ellipse(0, 0, w * 0.06, h * 0.16, 0, 0, Math.PI * 2); g.fill();
-  g.beginPath(); g.ellipse(w, 0, w * 0.06, h * 0.16, 0, 0, Math.PI * 2); g.fill();
-  for (const u of [0.25, 0.75]) { g.beginPath(); g.ellipse(w * u, 0, w * 0.13, h * 0.22, 0, 0, Math.PI * 2); g.fill(); }
-  g.fillStyle = PINK;
-  for (const u of [0.36, 0.64, 0.12, 0.88]) g.fillRect(w * u - 5, 0, 10, h * 0.2);
-  // tatuaje «tous les jours» bajo la clavícula
-  g.fillStyle = 'rgba(40,28,36,.8)';
-  g.font = 'italic 7px Georgia, serif'; g.textAlign = 'center';
-  g.fillText('tous', w * 0.5, h * 0.105); g.fillText('les jours', w * 0.5, h * 0.14);
-  // collar fino
-  g.strokeStyle = 'rgba(220,170,180,.9)'; g.lineWidth = 1.5;
-  g.beginPath(); g.moveTo(w * 0.47, h * 0.06); g.lineTo(w * 0.5, h * 0.17); g.lineTo(w * 0.53, h * 0.06); g.stroke();
-});
-
-// camiseta ringer blanca con ribete oscuro y letras en cursiva (Luz)
-const ringerTex = () => canvasTexture(512, 256, (g, w, h) => {
-  g.fillStyle = '#f6f1e8'; g.fillRect(0, 0, w, h);
-  folds(g, w, h, 10, 0.05, rand(4));
-  g.fillStyle = SKIN; g.fillRect(0, 0, w, h * 0.07);
-  g.beginPath(); g.ellipse(w * 0.5, h * 0.04, w * 0.06, h * 0.1, 0, 0, Math.PI * 2); g.fill();
-  g.strokeStyle = '#3e2c28'; g.lineWidth = 7;
-  g.beginPath(); g.moveTo(0, h * 0.075); g.lineTo(w * 0.44, h * 0.075);
-  g.ellipse(w * 0.5, h * 0.04, w * 0.06, h * 0.105, 0, Math.PI, 0, true);
-  g.moveTo(w * 0.56, h * 0.075); g.lineTo(w, h * 0.075); g.stroke();
-  g.fillStyle = '#1f1a2a';
-  g.font = 'italic 600 30px "Snell Roundhand", "Brush Script MT", "Segoe Script", cursive';
-  g.textAlign = 'center';
-  g.fillText('Laagam', w * 0.5, h * 0.36);
-});
-
-// espinilla: rodilla de piel y calcetín negro alto
-const sockTex = () => canvasTexture(32, 64, (g, w, h) => {
-  g.fillStyle = '#16141a'; g.fillRect(0, 0, w, h);
-  g.fillStyle = 'rgba(255,255,255,.05)'; for (let y = 0; y < h; y += 3) g.fillRect(0, y, w, 1);
-  g.fillStyle = SKIN; g.fillRect(0, 0, w, h * 0.28);
-});
-
-const stripedShoe = () => canvasTexture(64, 64, (g, w, h) => {
-  g.fillStyle = '#121014'; g.fillRect(0, 0, w, h);
-  g.fillStyle = '#f2efe8';
-  for (const cx of [w * 0.25, w * 0.75]) for (let i = 0; i < 3; i++) {
-    g.save(); g.translate(cx - 7 + i * 7, h * 0.5); g.rotate(-0.45); g.fillRect(-2, -14, 4, 28); g.restore();
-  }
-});
-
-const hairStrands = (base, light, dark, seed) => canvasTexture(128, 128, (g, w, h) => {
-  const R = rand(seed);
-  g.fillStyle = base; g.fillRect(0, 0, w, h);
-  for (let i = 0; i < 140; i++) {
-    g.strokeStyle = R() < 0.5 ? light : dark;
-    g.globalAlpha = 0.25 + R() * 0.4;
-    g.lineWidth = 0.6 + R() * 1.4;
-    const x = R() * w;
-    g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + (R() - 0.5) * 8, h * 0.3, x + (R() - 0.5) * 8, h * 0.7, x + (R() - 0.5) * 6, h); g.stroke();
-  }
-  g.globalAlpha = 1;
-}, { repeat: true });
-
-// ── Cara pintada (ojos con iris, cejas, nariz, labios) ──
+// ── Cara de muñeco pintada sobre una cabeza redonda de verdad ──
 const FACE = { phi0: Math.PI + 0.55, phiLen: Math.PI - 1.1, th0: 0.3 * Math.PI, thLen: 0.48 * Math.PI };
 function faceTexture({ brows, lips, iris, lashes }) {
   const W = 512, H = Math.round(W * FACE.thLen / FACE.phiLen);
@@ -196,11 +81,11 @@ function faceTexture({ brows, lips, iris, lashes }) {
       g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
     };
     for (const sx of [-1, 1]) {
-      const x = cx + sx * 0.36 * pxRad;
-      shade(x, eyeY - 4, 34, 0.18);                                  // cuenca
-      shade(x + sx * 18, yAt(Math.PI / 2 + 0.36), 34, 0.16, '225,110,110'); // mejilla
-      // ojo almendrado
-      g.save(); g.translate(x, eyeY);
+      const x = cx + sx * 0.41 * pxRad;
+      shade(x, eyeY - 4, 46, 0.16);                                  // cuenca
+      shade(x + sx * 14, yAt(Math.PI / 2 + 0.38), 40, 0.24, '230,105,110'); // colorete
+      // ojo almendrado, un poco más grande
+      g.save(); g.translate(x, eyeY); g.scale(1.5, 1.5);
       g.beginPath();
       g.moveTo(-24, 2); g.quadraticCurveTo(-4, -16, 24 * 1, -2); g.quadraticCurveTo(4, 12, -24, 2);
       g.closePath();
@@ -212,7 +97,7 @@ function faceTexture({ brows, lips, iris, lashes }) {
       g.fillStyle = 'rgba(60,30,30,.35)'; g.fillRect(-26, -16, 52, 7);     // sombra del párpado
       g.restore();
       // línea de pestañas y párpado
-      g.save(); g.translate(x, eyeY);
+      g.save(); g.translate(x, eyeY); g.scale(1.5, 1.5);
       g.strokeStyle = '#1a0f0e'; g.lineWidth = lashes; g.lineCap = 'round';
       g.beginPath(); g.moveTo(-25, 2); g.quadraticCurveTo(-4, -17, 25, -3); g.stroke();
       g.lineWidth = 1.2; g.strokeStyle = 'rgba(110,60,50,.6)';
@@ -220,7 +105,7 @@ function faceTexture({ brows, lips, iris, lashes }) {
       g.beginPath(); g.moveTo(-20, 5); g.quadraticCurveTo(2, 12, 22, 0); g.stroke();
       g.restore();
       // ceja
-      g.save(); g.translate(x, eyeY - 30);
+      g.save(); g.translate(x, eyeY - 42); g.scale(1.2, 1.2);
       g.strokeStyle = brows; g.lineCap = 'round'; g.lineWidth = 8;
       g.beginPath(); g.moveTo(-sx * 24, 5); g.quadraticCurveTo(sx * 2, -7, sx * 26, 1); g.stroke();
       g.restore();
@@ -233,6 +118,7 @@ function faceTexture({ brows, lips, iris, lashes }) {
     g.beginPath(); g.ellipse(cx + 8, ny, 4, 2.5, -0.3, 0, Math.PI * 2); g.fill();
     // labios
     const my = yAt(Math.PI / 2 + 0.5);
+    g.save(); g.translate(cx, my); g.scale(1.45, 1.45); g.translate(-cx, -my);
     g.fillStyle = lips;
     g.beginPath();
     g.moveTo(cx - 25, my);
@@ -244,121 +130,147 @@ function faceTexture({ brows, lips, iris, lashes }) {
     g.beginPath(); g.moveTo(cx - 24, my); g.quadraticCurveTo(cx, my + 2, cx + 24, my); g.stroke();
     g.fillStyle = 'rgba(255,255,255,.25)';
     g.beginPath(); g.ellipse(cx + 5, my + 5, 6, 2, 0, 0, Math.PI * 2); g.fill();
+    g.restore();
     shade(cx, my + 24, 16, 0.12);   // hoyuelo de la barbilla
   });
 }
 
-// Cabeza: esfera con mandíbula y barbilla
-function shapeHead(geo) {
-  const p = geo.attributes.position, v = new THREE.Vector3();
+// la foto ya trae su luz: brilla un poco por sí misma para no apagarse al atardecer
+const photoMat = (map, extra = {}) => new THREE.MeshLambertMaterial({
+  map, emissiveMap: map, emissive: new THREE.Color(0.62, 0.58, 0.56), flatShading: true, ...extra,
+});
+
+// punto de la foto a lo largo de una zona A→B: t 0..1 (de A a B), s -1..1
+// (+1 = su derecha, que en la foto queda a la izquierda)
+function segUV(spec, t, s) {
+  const [ax, ay] = spec.A, [bx, by] = spec.B;
+  const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1;
+  const nx = dy / L, ny = -dx / L;
+  const wA = spec.wA ?? spec.w, wB = spec.wB ?? spec.w;
+  const w = wA + (wB - wA) * t;
+  return [(ax + dx * t - nx * s * w) / IMG.w, 1 - (ay + dy * t - ny * s * w) / IMG.h];
+}
+
+/**
+ * Proyecta la foto sobre un tubo vertical: cada anillo de vértices se reparte
+ * a lo ancho de la zona. Delante usa `spec`; detrás, `back` (o la misma).
+ * frontZ: hacia dónde mira su cara delantera · fromBottom: A está abajo (huesos)
+ */
+function projectTube(geo, spec, back, frontZ, fromBottom = false) {
+  const p = geo.attributes.position, uv = geo.attributes.uv;
+  geo.computeBoundingBox();
+  const { min, max } = geo.boundingBox;
+  const h = max.y - min.y || 1;
+  const ring = new Map();
+  const key = y => Math.round(y * 1e4);
   for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i);
-    const r = v.length() || 1, ny = v.y / r;
-    const jaw = ny < 0 ? 1 - 0.3 * Math.pow(-ny, 1.4) : 1;
-    v.x *= 0.9 * jaw;
-    v.z *= (ny < 0 ? 1 - 0.12 * -ny : 1) * (v.z > 0 ? 1.06 : 1);     // nuca más llena
-    v.y *= 1.12;
-    p.setXYZ(i, v.x, v.y, v.z);
+    const k = key(p.getY(i));
+    ring.set(k, Math.max(ring.get(k) || 0, Math.abs(p.getX(i))));
   }
-  geo.computeVertexNormals();
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const t = clamp01(fromBottom ? (y - min.y) / h : (max.y - y) / h);
+    const r = ring.get(key(y)) || 0;
+    const s = r > 1e-5 ? Math.max(-1, Math.min(1, x / r)) : 0;
+    const sp = z * frontZ >= -1e-6 ? spec : (back || spec);
+    const [u, v] = segUV(sp, t, s);
+    uv.setXY(i, u, v);
+  }
+  uv.needsUpdate = true;
   return geo;
 }
 
-// ── Huesos: cápsulas que se estrechan, recolocadas en cada fotograma ──
-const UP = new THREE.Vector3(0, 1, 0);
-const _d = new THREE.Vector3();
-function taperGeo(rA, rB, len, bulge = 0, at = 0.4, seg = 16) {
-  const pts = [];
-  for (let i = 0; i <= 6; i++) { const a = -Math.PI / 2 + (i / 6) * Math.PI / 2; pts.push(new THREE.Vector2(Math.cos(a) * rA, -len / 2 + Math.sin(a) * rA)); }
-  for (let i = 1; i < 10; i++) {
-    const k = i / 10;
-    const bump = bulge * Math.pow(Math.sin(Math.PI * Math.min(1, k < at ? k / at * 0.5 : 0.5 + (k - at) / (1 - at) * 0.5)), 1.5);
-    pts.push(new THREE.Vector2(rA + (rB - rA) * k + bump, -len / 2 + len * k));
+/** Proyección plana de frente sobre un rectángulo (cabeza, pelo, zapatos…). */
+function projectRect(geo, rect, backRect = rect, frontZ = -1, backFrom = 0.25, size = IMG) {
+  const p = geo.attributes.position, uv = geo.attributes.uv;
+  geo.computeBoundingBox();
+  const { min, max } = geo.boundingBox;
+  const cx = (min.x + max.x) / 2, cy = (min.y + max.y) / 2, cz = (min.z + max.z) / 2;
+  const hx = (max.x - min.x) / 2 || 1, hy = (max.y - min.y) / 2 || 1, hz = (max.z - min.z) / 2 || 1;
+  for (let i = 0; i < p.count; i++) {
+    const sx = (p.getX(i) - cx) / hx, sy = (p.getY(i) - cy) / hy;
+    const behind = (p.getZ(i) - cz) * frontZ / hz < -backFrom;
+    const [x0, y0, x1, y1] = behind ? backRect : rect;
+    const px = (x0 + x1) / 2 - sx * (x1 - x0) / 2;
+    const py = (y0 + y1) / 2 - sy * (y1 - y0) / 2;
+    uv.setXY(i, px / size.w, 1 - py / size.h);
   }
-  for (let i = 0; i <= 6; i++) { const a = (i / 6) * Math.PI / 2; pts.push(new THREE.Vector2(Math.cos(a) * rB, len / 2 + Math.sin(a) * rB)); }
-  pts[0].x = 0.0001; pts[pts.length - 1].x = 0.0001;
-  return new THREE.LatheGeometry(pts, seg);
+  uv.needsUpdate = true;
+  return geo;
 }
-function bone(rA, rB, len, mat, bulge = 0, at = 0.4) {
-  const m = new THREE.Mesh(taperGeo(rA, rB, len, bulge, at), mat);
+
+// ── Huesos: tubos de pocos lados recolocados en cada fotograma ──
+// Con giro estable: su cara delantera (+z de la pieza) mira siempre hacia
+// delante del cuerpo, para que la foto no se dé la vuelta al moverse.
+const FWD = V(0, 0, -1), RIGHT = V(1, 0, 0);
+const _x = V(0, 0, 0), _y = V(0, 0, 0), _z = V(0, 0, 0), _m = new THREE.Matrix4();
+function place(m, a, b) {
+  _y.subVectors(b, a);
+  const len = Math.max(0.001, _y.length());
+  _y.divideScalar(len);
+  m.position.addVectors(a, b).multiplyScalar(0.5);
+  const f = _y.dot(FWD);
+  if (Math.abs(f) < 0.8) {
+    _z.copy(FWD).addScaledVector(_y, -f).normalize();
+    _x.crossVectors(_y, _z);
+  } else {
+    _x.copy(RIGHT).addScaledVector(_y, -_y.dot(RIGHT)).normalize();
+    _z.crossVectors(_x, _y);
+  }
+  _m.makeBasis(_x, _y, _z);
+  m.quaternion.setFromRotationMatrix(_m);
+  m.scale.y = len / m.userData.len;
+}
+// tubo del punto a (abajo en la geometría, radio rA) al b (arriba, radio rB)
+function bone(rA, rB, len, mat, spec, back, seg = SEG) {
+  const g = new THREE.CylinderGeometry(rB, rA, len, seg, 2);
+  projectTube(g, spec, back, 1, true);
+  const m = new THREE.Mesh(g, mat);
   m.userData.len = len;
   return m;
 }
-function place(m, a, b) {
-  _d.subVectors(b, a);
-  const len = Math.max(0.001, _d.length());
-  m.position.addVectors(a, b).multiplyScalar(0.5);
-  m.quaternion.setFromUnitVectors(UP, _d.normalize());
-  m.scale.y = len / m.userData.len;
-}
+const joint = (r, mat, rect) => new THREE.Mesh(projectRect(new THREE.IcosahedronGeometry(r, 0), rect), mat);
+const around = ([x, y], w, h = w) => [x - w, y - h, x + w, y + h];
 
-function torsoGeo(bust) {
-  // perfil de cadera → cintura → pecho → hombros (en coordenadas de sentada)
-  // tronco recto: cadera, cintura apenas marcada y hombros, sin pecho
-  const prof = [[0.0001, 0.47], [0.1, 0.478], [0.134, 0.53], [0.135, 0.58], [0.127, 0.65], [0.124, 0.72],
-    [0.125, 0.79], [0.128, 0.86], [0.14, 0.915], [0.134, 0.952],
-    [0.1, 0.982], [0.05, 0.998], [0.0001, 1.004]];
-  const curve = new THREE.SplineCurve(prof.map(([r, y]) => new THREE.Vector2(r, y)));
-  const g = new THREE.LatheGeometry(curve.getPoints(48), 32);
-  g.scale(1.2, 1, 0.6);
-  g.translate(0, 0, 0.07);
-  return g;
-}
-
-function sneaker(upperMat, soleColor) {
-  const g = new THREE.Group();
-  const sole = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.025, 0.21), lam(soleColor));
-  sole.position.set(0, 0.0125, -0.03);
-  const upper = new THREE.Mesh(new THREE.SphereGeometry(0.05, 14, 10), upperMat);
-  upper.scale.set(0.85, 0.75, 2.0);
-  upper.position.set(0, 0.04, -0.035);
-  g.add(sole, upper);
-  return g;
-}
-
-function hand(mat) {
-  const g = new THREE.Group();
-  const palm = new THREE.Mesh(new THREE.SphereGeometry(0.03, 14, 10), mat);
-  palm.scale.set(0.95, 1.25, 0.5);
-  palm.position.y = 0.032;
-  const fingers = new THREE.Mesh(new THREE.SphereGeometry(0.026, 12, 8), mat);
-  fingers.scale.set(1.0, 1.4, 0.45);
-  fingers.position.set(0, 0.07, 0.002);
-  const thumb = bone(0.01, 0.008, 0.028, mat);
-  place(thumb, V(0.018, 0.022, -0.008), V(0.026, 0.05, -0.014));
-  g.add(palm, fingers, thumb);
-  return g;
-}
-
-// ── Cuerpo articulado (mirando hacia -z) ──
-function riggedBody({ top, sleeves, armMat, foreMats, upMats, thighs, shins, shoes, armsCrossed, face, bust = 0.012, legR = [0.07, 0.05, 0.045, 0.036] }) {
+/**
+ * Cuerpo articulado (mirando hacia -z) con la foto encima.
+ * S: zonas de la foto · o: medidas propias de cada una
+ */
+function photoBody(mat, S, o) {
   const body = new THREE.Group();     // en el suelo
   const upper = new THREE.Group();    // tronco, cuello y cabeza: sube al levantarse
   body.add(upper);
-  const skin = phong(SKIN);
 
-  const torso = new THREE.Mesh(torsoGeo(bust), top);
+  // tronco: de la cadera (0.47) a los hombros (1.0), en coordenadas de sentada
+  const tg = new THREE.CylinderGeometry(o.torso[0], o.torso[1], 0.53, 8, 3);
+  projectTube(tg, S.torso, S.torsoBack, -1);
+  tg.scale(1, 1, 0.62);
+  tg.translate(0, 0.735, 0.07);
+  const torso = new THREE.Mesh(tg, mat);
   upper.add(torso);
 
-  const neck = bone(0.043, 0.038, 0.07, skin);
-  place(neck, V(0, 0.98, 0.08), V(0, 1.07, 0.075));
+  const neck = bone(0.045, 0.04, 0.09, mat, S.neck, null, 6);
+  place(neck, V(0, 0.98, 0.08), V(0, 1.08, 0.075));
   upper.add(neck);
 
+  // cabeza redonda de tamaño natural, piel lisa y cara de muñeco pintada
   const head = new THREE.Group();
   head.position.set(0, 1.06, 0.07);
-  const skull = new THREE.Mesh(shapeHead(new THREE.SphereGeometry(0.088, 28, 20)), skin);
+  const glow = new THREE.Color(0.26, 0.24, 0.24);
+  const skin = new THREE.MeshPhongMaterial({ color: o.skin, shininess: 14, specular: 0x2a1c18,
+    emissive: new THREE.Color(o.skin).multiply(glow) });
+  const skull = new THREE.Mesh(shapeHead(new THREE.SphereGeometry(0.088, 24, 18)), skin);
   skull.position.y = 0.1;
-  const faceMesh = new THREE.Mesh(
+  const faceMap = faceTexture(o.face);
+  skull.add(new THREE.Mesh(
     shapeHead(new THREE.SphereGeometry(0.0886, 40, 28, FACE.phi0, FACE.phiLen, FACE.th0, FACE.thLen)),
-    new THREE.MeshPhongMaterial({ map: faceTexture(face), transparent: true, depthWrite: false, shininess: 14, specular: 0x2a1c18 }));
-  faceMesh.material.color.set(SKIN).lerp(new THREE.Color('#ffffff'), 0.0);
-  faceMesh.material.color.set('#ffffff');
-  skull.add(faceMesh);
-  // nariz y orejas
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.013, 10, 8), skin);
-  nose.scale.set(0.85, 1.45, 1); nose.position.set(0, -0.012, -0.084);
-  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.011, 10, 8), skin);
-  tip.position.set(0, -0.026, -0.09);
+    new THREE.MeshPhongMaterial({ map: faceMap, emissiveMap: faceMap, emissive: glow, transparent: true,
+      depthWrite: false, shininess: 14, specular: 0x2a1c18 })));
+  // naricita y orejas
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.009, 10, 8), skin);
+  nose.scale.set(0.8, 1.5, 0.7); nose.position.set(0, -0.016, -0.085);
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.0075, 10, 8), skin);
+  tip.scale.set(1, 0.9, 0.8); tip.position.set(0, -0.026, -0.088);
   skull.add(nose, tip);
   for (const sx of [-1, 1]) {
     const ear = new THREE.Mesh(new THREE.SphereGeometry(0.017, 8, 6), skin);
@@ -368,28 +280,35 @@ function riggedBody({ top, sleeves, armMat, foreMats, upMats, thighs, shins, sho
   head.add(skull);
   upper.add(head);
 
-  // piernas y brazos
-  const legs = [-1, 1].map(sx => {
-    const thigh = bone(legR[0], legR[1], 0.36, thighs, legR[4] || 0, 0.3), shin = bone(legR[2], legR[3], 0.4, shins, legR[5] || 0, 0.3);
-    const knee = new THREE.Mesh(new THREE.SphereGeometry(legR[1] * 1.02, 10, 8), thighs);
-    const shoe = shoes();
+  // piernas y brazos (+1 = su derecha)
+  const L = o.legs;
+  const legs = [1, -1].map(sx => {
+    const k = sx > 0 ? 'R' : 'L';
+    const thigh = bone(L[0], L[1], 0.36, mat, S['thigh' + k]);
+    const shin = bone(L[2], L[3], 0.4, mat, S['shin' + k]);
+    const knee = joint(L[1] * 1.02, mat, around(S['shin' + k].A, S['shin' + k].w * 0.7));
+    const shoe = new THREE.Mesh(projectRect(new THREE.BoxGeometry(o.shoe[0], 0.075, o.shoe[1]), S['shoe' + k].rect, S['shoe' + k].rect, -1, 2), mat);
     body.add(thigh, shin, knee, shoe);
     return { sx, thigh, shin, knee, shoe };
   });
-  const armsList = [-1, 1].map(sx => {
-    const up = bone(0.038, 0.029, 0.26, (upMats && upMats[sx]) || armMat, 0.006, 0.4), fore = bone(0.03, 0.021, 0.235, (foreMats && foreMats[sx]) || armMat, 0.005, 0.25);
-    const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.029, 12, 8), armMat);
-    const h = hand(skin);
-    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.046, 14, 10), sleeves || armMat);
-    shoulder.scale.set(1, 0.9, 0.9);
-    const sleeve = sleeves ? bone(0.05, 0.046, 0.1, sleeves) : null;
-    body.add(up, fore, elbow, h, shoulder); if (sleeve) body.add(sleeve);
-    return { sx, up, fore, elbow, hand: h, shoulder, sleeve };
+  const A = o.arms;
+  const armsList = [1, -1].map(sx => {
+    const k = sx > 0 ? 'R' : 'L';
+    const up = bone(A[0], A[1], 0.26, mat, S['up' + k]);
+    const fore = bone(A[2], A[3], 0.235, mat, S['fore' + k]);
+    const elbow = joint(A[1] * 1.05, mat, around(S['up' + k].B, S['up' + k].w * 0.6));
+    const hand = bone(0.03, 0.026, 0.085, mat, S['hand' + k], null, 5);
+    // hombro: un poco más abajo del borde de la foto, para no coger fondo gris
+    const [sxp, syp] = S['up' + k].A;
+    const shoulder = joint(A[0] * 1.15, mat, around([sxp + sx * 4, syp + 22], S['up' + k].w * 0.55));
+    body.add(up, fore, elbow, hand, shoulder);
+    return { sx, up, fore, elbow, hand, shoulder };
   });
 
   const P = { hip: V(0, 0, 0), knee: V(0, 0, 0), ankle: V(0, 0, 0), sh: V(0, 0, 0), el: V(0, 0, 0), hand: V(0, 0, 0) };
   const tmp = V(0, 0, 0), dir = V(0, 0, 0);
   const mix = (out, a, b, k) => out.copy(a).lerp(b, k);
+  const armsCrossed = o.armsCrossed;
 
   /**
    * b: 0 sentada → 1 de pie · stride: fase del paso · walk: 0..1 cuánto camina
@@ -397,8 +316,8 @@ function riggedBody({ top, sleeves, armMat, foreMats, upMats, thighs, shins, sho
    */
   function pose({ b, stride = 0, walk = 0, wave = 0, waveSide = 1, t = 0 }) {
     upper.position.y = -DROP + (LIFT + DROP) * b;
-    for (const L of legs) {
-      const { sx } = L;
+    for (const Lg of legs) {
+      const { sx } = Lg;
       const sw = Math.sin(stride + (sx > 0 ? 0 : Math.PI)) * walk;
       const lift = Math.max(0, Math.cos(stride + (sx > 0 ? 0 : Math.PI))) * walk;
       mix(P.hip, V(sx * 0.075, 0.53 - DROP, 0.03), V(sx * 0.075, 0.53 + LIFT, 0.03), b);
@@ -407,13 +326,13 @@ function riggedBody({ top, sleeves, armMat, foreMats, upMats, thighs, shins, sho
       P.knee.y += lift * 0.05;
       mix(P.ankle, V(sx * 0.11, 0.09, -0.4), V(sx * 0.09, 0.09, 0.03), b);
       P.ankle.z -= sw * 0.12; P.ankle.y += lift * 0.07;
-      place(L.thigh, P.hip, P.knee);
-      place(L.shin, P.knee, P.ankle);
-      L.knee.position.copy(P.knee);
-      L.shoe.position.set(P.ankle.x, P.ankle.y - 0.085, P.ankle.z);
+      place(Lg.thigh, P.hip, P.knee);
+      place(Lg.shin, P.knee, P.ankle);
+      Lg.knee.position.copy(P.knee);
+      Lg.shoe.position.set(P.ankle.x, P.ankle.y - 0.05, P.ankle.z - 0.03);
     }
-    for (const A of armsList) {
-      const { sx } = A;
+    for (const Ar of armsList) {
+      const { sx } = Ar;
       P.sh.set(sx * 0.165, 0.94 - DROP + (LIFT + DROP) * b, 0.08);
       const seatEl = armsCrossed ? V(sx * 0.2, 0.74 - DROP, -0.02) : V(sx * 0.23, 0.71 - DROP, 0.02);
       const seatHand = armsCrossed ? V(-sx * 0.08, 0.82 - DROP, -0.11) : V(sx * 0.2, 0.62 - DROP, -0.2);
@@ -425,163 +344,98 @@ function riggedBody({ top, sleeves, armMat, foreMats, upMats, thighs, shins, sho
         P.el.lerp(V(sx * 0.29, 0.82 + LIFT, 0.05), wave);
         P.hand.lerp(V(sx * (0.31 + Math.sin(t * 9) * 0.05), 1.03 + LIFT, 0.01), wave);
       }
-      place(A.up, P.sh, P.el);
-      place(A.fore, P.el, P.hand);
-      A.elbow.position.copy(P.el);
-      A.shoulder.position.copy(P.sh).add(tmp.set(-sx * 0.01, 0.0, 0));
-      if (A.sleeve) place(A.sleeve, P.sh, tmp.copy(P.sh).lerp(P.el, 0.42));
+      place(Ar.up, P.sh, P.el);
+      place(Ar.fore, P.el, P.hand);
+      Ar.elbow.position.copy(P.el);
+      Ar.shoulder.position.copy(P.sh).add(tmp.set(-sx * 0.012, -0.01, 0));
       // mano: sigue la dirección del antebrazo
       dir.subVectors(P.hand, P.el).normalize();
-      A.hand.position.copy(P.hand);
-      A.hand.quaternion.setFromUnitVectors(UP, dir);
+      place(Ar.hand, P.hand, tmp.copy(P.hand).addScaledVector(dir, 0.085));
     }
   }
 
   return { body, upper, torso, head, skull, legs, armsList, pose };
 }
 
-// ── Luz: melena castaña lisa con moñito arriba, ringer blanca, falda midi de cuadros ──
-function makeLuz() {
-  const tee = lam('#ffffff', { map: ringerTex() });
-  const sleeveMat = lam('#f6f1e8');
-  const trim = lam('#3e2c28');
-  const skirt = lam('#ffffff', { map: plaid(2, 1), side: THREE.DoubleSide });
-  const rig = riggedBody({
-    top: tee, sleeves: sleeveMat, armMat: phong(SKIN), bust: 0.014,
-    thighs: phong(SKIN), shins: phong('#ffffff', { map: sockTex() }),
-    shoes: () => sneaker(lam('#ffffff', { map: stripedShoe() }), '#f1ede6'),
-    face: { brows: '#3a2418', lips: '#c4706c', iris: '#5a3a24', lashes: 5.5 },
-    legR: [0.07, 0.046, 0.038, 0.029, 0.004, 0.012],
-  });
-  const { upper, head } = rig;
-
-  // ribete oscuro en las mangas
-  for (const A of rig.armsList) {
-    const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.047, 0.008, 6, 16), trim);
-    A.sleeve.add(cuff);
-    cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.05;
+// ── Pelo de los muñecos de antes ──
+const hairStrands = (base, light, dark, seed) => canvasTexture(128, 128, (g, w, h) => {
+  const R = rand(seed);
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 140; i++) {
+    g.strokeStyle = R() < 0.5 ? light : dark;
+    g.globalAlpha = 0.25 + R() * 0.4;
+    g.lineWidth = 0.6 + R() * 1.4;
+    const x = R() * w;
+    g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + (R() - 0.5) * 8, h * 0.3, x + (R() - 0.5) * 8, h * 0.7, x + (R() - 0.5) * 6, h); g.stroke();
   }
-  // collar de cuentas
-  const choker = new THREE.Mesh(new THREE.TorusGeometry(0.039, 0.005, 6, 18), lam('#1c1820'));
-  choker.rotation.x = Math.PI / 2 - 0.15; choker.position.set(0, 1.035, 0.075);
-  upper.add(choker);
-  const silver = lam('#d6d6dc');
-  const chain = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.0016, 4, 24, Math.PI), silver);
-  chain.position.set(0, 1.0, 0.05); chain.rotation.set(Math.PI / 2 + 0.75, 0, Math.PI);
-  upper.add(chain);
-  for (const [x, y, s] of [[0, 0.935, 0.008], [0.012, 0.955, 0.006]]) {
-    const charm = new THREE.Mesh(new THREE.OctahedronGeometry(s), x ? silver : lam('#222026'));
-    charm.scale.y = 1.6; charm.position.set(x, y, -0.035);
-    upper.add(charm);
+  g.globalAlpha = 1;
+}, { repeat: true });
+// casquete con forma de cabeza (mandíbula, nuca llena)
+function shapeHead(geo) {
+  const p = geo.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const r = v.length() || 1, ny = v.y / r;
+    const jaw = ny < 0 ? 1 - 0.3 * Math.pow(-ny, 1.4) : 1;
+    v.x *= 0.9 * jaw;
+    v.z *= (ny < 0 ? 1 - 0.12 * -ny : 1) * (v.z > 0 ? 1.06 : 1);
+    v.y *= 1.12;
+    p.setXYZ(i, v.x, v.y, v.z);
   }
-
-  // falda midi con vuelo: sentada cae por delante de las rodillas; de pie, de la cadera a media pierna
-  const hem = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.22, 0.16, 16, 1, true), skirt);
-  const flare = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 1, 20, 3, true),
-    lam('#ffffff', { map: plaid(5, 3), side: THREE.DoubleSide }));
-  // pliegues
-  const fp = flare.geometry.attributes.position;
-  for (let i = 0; i < fp.count; i++) {
-    const x = fp.getX(i), z = fp.getZ(i), y = fp.getY(i);
-    const a = Math.atan2(z, x), k = 1 + Math.sin(a * 10) * 0.05 * (0.5 - y);
-    fp.setXYZ(i, x * k, y, z * k);
-  }
-  flare.geometry.computeVertexNormals();
-  const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.08, 18), skirt);
-  waist.position.set(0, 0.53, 0.04);
-  waist.scale.z = 0.8;
-  upper.add(waist);
-  rig.body.add(hem, flare);
-
-  const hairMat = phong('#ffffff', { map: hairStrands('#a07a4c', 'rgba(222,190,140,1)', 'rgba(110,78,46,1)', 7), side: THREE.DoubleSide, shininess: 30 });
-  // gorro de pelo: por detrás y por arriba, con raya en medio
-  for (const geo of [
-    new THREE.SphereGeometry(0.096, 16, 12, 0, Math.PI, 0, Math.PI * 0.75),
-    new THREE.SphereGeometry(0.096, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.3),
-  ]) {
-    const cap = new THREE.Mesh(shapeHead(geo), hairMat);
-    cap.position.set(0, 0.105, 0.006);
-    head.add(cap);
-  }
-  // melena larga detrás (lámina curva, como el pelo de los juegos de PS2)
-  const tail = new THREE.Group();
-  tail.position.set(0, 0.12, 0.03);
-  const back = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.42, 14, 4, true, -Math.PI / 2 - 0.1, Math.PI + 0.2), hairMat);
-  back.position.set(0, -0.2, 0.02);
-  back.scale.z = 0.75;
-  tail.add(back);
-  head.add(tail);
-  // mechones delante de los hombros, enmarcando la cara
-  for (const sx of [-1, 1]) {
-    const lock = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.32, 8, 3, true, 0, Math.PI * 2), hairMat);
-    lock.position.set(sx * 0.085, -0.06, -0.01);
-    lock.rotation.z = sx * 0.12;
-    lock.scale.z = 0.5;
-    head.add(lock);
-  }
-  // flequillo cortina, abierto en medio
-  for (const sx of [-1, 1]) {
-    const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8, Math.PI * 1.5 - (sx < 0 ? 0.95 : -0.05), 0.9, Math.PI * 0.2, Math.PI * 0.2), hairMat);
-    fringe.position.set(0, 0.105, 0.004);
-    fringe.scale.set(0.95, 1.12, 1.0);
-    head.add(fringe);
-  }
-  // moñito arriba
-  const bun = new THREE.Mesh(new THREE.IcosahedronGeometry(0.03, 1), hairMat);
-  bun.position.set(0, 0.215, 0.03);
-  head.add(bun);
-  // pendientes
-  for (const sx of [-1, 1]) {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.009, 0.0022, 6, 12), lam('#d8d8de'));
-    ring.position.set(sx * 0.074, 0.065, 0.0); ring.rotation.y = Math.PI / 2;
-    head.add(ring);
-  }
-
-  const pose = rig.pose;
-  rig.pose = (o) => {
-    pose(o);
-    const b = o.b;
-    hem.visible = b < 0.5;
-    hem.position.set(0, 0.36 + 0.26 * b, -0.33 + 0.27 * b);
-    flare.visible = b >= 0.5;
-    const len = 0.3 + 0.16 * smooth((b - 0.5) * 2);
-    flare.scale.set(1, len, 0.85);
-    flare.position.set(0, 0.88 + 0.02 - len / 2, 0.03);
-    flare.rotation.z = Math.sin((o.t || 0) * 1.3) * 0.03;
-  };
-
-  return { ...rig, hair: tail, lookBias: 0.35 };
+  geo.computeVertexNormals();
+  return geo;
 }
 
-// ── María: afro grande, tirantes blanca, tatuajes, cargo de camuflaje muy anchos ──
+// ── María: rizos, tirantes rosa, tatuajes, cargo de camuflaje muy anchos ──
+const MARIA = {
+  head: { rect: [332, 88, 532, 278] },
+  hairBack: [470, 105, 515, 150],
+  neck: { A: [432, 250], B: [432, 292], w: 20 },
+  torso: { A: [432, 292], B: [432, 600], w: 86 },
+  torsoBack: { A: [432, 360], B: [432, 600], w: 70 },
+  upR: { A: [337, 300], B: [318, 495], w: 18 },
+  foreR: { A: [318, 495], B: [312, 590], w: 12 },
+  handR: { A: [314, 555], B: [313, 590], w: 8 },          // manos: piel lisa del antebrazo
+  upL: { A: [527, 300], B: [545, 495], w: 18 },
+  foreL: { A: [545, 495], B: [550, 590], w: 12 },
+  handL: { A: [549, 555], B: [550, 590], w: 8 },
+  thighR: { A: [385, 610], B: [350, 860], w: 55 },
+  shinR: { A: [350, 860], B: [300, 1045], w: 55 },
+  thighL: { A: [480, 610], B: [515, 860], w: 55 },
+  shinL: { A: [515, 860], B: [565, 1045], w: 55 },
+  shoeR: { rect: [238, 1065, 306, 1122] },
+  shoeL: { rect: [544, 1065, 612, 1122] },
+};
+
 function makeMaria() {
-  const pants = lam('#ffffff', { map: camo() });
-  pants.color.setRGB(1.0, 0.97, 0.94);   // que el camuflaje se lea con la luz del atardecer
-  const rig = riggedBody({
-    top: phong('#ffffff', { map: tankTex() }), armMat: phong(SKIN), foreMats: { 1: phong('#ffffff', { map: blotArm() }) }, upMats: { 1: phong('#ffffff', { map: houseArm() }) },
-    thighs: pants, shins: pants, armsCrossed: true, bust: 0.01,
-    shoes: () => sneaker(lam('#4a3024'), '#3a2a20'),
-    face: { brows: '#1e130e', lips: '#b3272f', iris: '#3e2618', lashes: 5 },
-    legR: [0.115, 0.108, 0.108, 0.13],     // pantalón muy ancho que cae sobre las zapatillas
+  const tex = dollTextures('assets/characters/maria.webp', {
+    head: MARIA.head.rect,
+    // tapa las manos de la foto (que no salgan pintadas en el pantalón)
+    covers: [[286, 590, 50, 130, 52], [526, 590, 52, 130, -52]],
+  });
+  const mat = photoMat(tex.body);
+  const rig = photoBody(mat, MARIA, {
+    skin: '#d9a487', face: { brows: '#1e130e', lips: '#b3272f', iris: '#3e2618', lashes: 6 },
+    torso: [0.16, 0.155], legs: [0.115, 0.105, 0.105, 0.125], arms: [0.04, 0.032, 0.03, 0.024],
+    shoe: [0.1, 0.22], armsCrossed: true,
   });
   // cintura del pantalón
-  const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.15, 0.1, 18), pants);
-  waist.position.set(0, 0.53, 0.05);
-  waist.scale.z = 0.8;
+  const wg = new THREE.CylinderGeometry(0.15, 0.16, 0.1, 8);
+  projectTube(wg, { A: [432, 590], B: [432, 625], w: 92 }, null, -1);
+  const waist = new THREE.Mesh(wg, mat);
+  waist.position.set(0, 0.52, 0.06); waist.scale.z = 0.8;
   rig.upper.add(waist);
-  // colgante
-  const chain = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.0018, 4, 20, Math.PI), lam('#d9d4cc'));
-  chain.position.set(0, 1.0, 0.04); chain.rotation.set(Math.PI / 2 + 0.6, 0, Math.PI);
-  rig.upper.add(chain);
 
+  // el afro de los muñecos de antes, agrandado a la cabeza nueva
   const hairMat = phong('#2a1a12', { flatShading: true, shininess: 8 });
   const hairMat2 = phong('#1c110c', { flatShading: true, shininess: 8 });
+  const hair = new THREE.Group();
   const afro = new THREE.Group();
-  afro.position.set(0, 0.13, 0.02);
+  hair.add(afro);
+  afro.position.set(0, 0.03, 0.02);
   const R = rand(21);
   // puntos de la cara que los rizos no deben tapar (en coordenadas del rizo)
   const facePts = [V(-0.032, -0.035, -0.1), V(0.032, -0.035, -0.1), V(0, -0.07, -0.095), V(0, -0.1, -0.08)];
-  // base del afro: por detrás y por arriba, sin tapar la cara
   for (const geo of [
     new THREE.SphereGeometry(0.12, 16, 12, 0, Math.PI, 0, Math.PI * 0.62),
     new THREE.SphereGeometry(0.12, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.3),
@@ -609,9 +463,179 @@ function makeMaria() {
     blob.position.set(x, 0.03 + Math.abs(x) * 0.25 + R() * 0.012, -0.085 + Math.abs(x) * 0.3);
     afro.add(blob);
   }
-  rig.head.add(afro);
+  rig.skull.add(hair);
+  return { ...rig, hair, lookBias: -0.3 };
+}
 
-  return { ...rig, hair: afro, lookBias: -0.3 };
+// ── Camiseta ringer de Luz (pintada, como los muñecos de antes) ──
+function folds(g, w, h, n, alpha, R) {
+  for (let i = 0; i < n; i++) {
+    const x = R() * w, wid = 3 + R() * 10;
+    const gr = g.createLinearGradient(x - wid, 0, x + wid, 0);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(0.5, `rgba(0,0,0,${alpha * (0.5 + R())})`);
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(x - wid, 0, wid * 2, h);
+  }
+}
+const ringerTex = (skin) => canvasTexture(512, 256, (g, w, h) => {
+  g.fillStyle = '#f6f1e8'; g.fillRect(0, 0, w, h);
+  folds(g, w, h, 10, 0.05, rand(4));
+  g.fillStyle = skin; g.fillRect(0, 0, w, h * 0.07);
+  g.beginPath(); g.ellipse(w * 0.5, h * 0.04, w * 0.06, h * 0.1, 0, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#3e2c28'; g.lineWidth = 7;
+  g.beginPath(); g.moveTo(0, h * 0.075); g.lineTo(w * 0.44, h * 0.075);
+  g.ellipse(w * 0.5, h * 0.04, w * 0.06, h * 0.105, 0, Math.PI, 0, true);
+  g.moveTo(w * 0.56, h * 0.075); g.lineTo(w, h * 0.075); g.stroke();
+  g.fillStyle = '#1f1a2a';
+  g.font = 'italic 600 30px "Snell Roundhand", "Brush Script MT", "Segoe Script", cursive';
+  g.textAlign = 'center';
+  g.fillText('Laagam', w * 0.5, h * 0.36);
+});
+function torsoGeo() {
+  const prof = [[0.0001, 0.47], [0.1, 0.478], [0.134, 0.53], [0.135, 0.58], [0.127, 0.65], [0.124, 0.72],
+    [0.125, 0.79], [0.128, 0.86], [0.14, 0.915], [0.134, 0.952],
+    [0.1, 0.982], [0.05, 0.998], [0.0001, 1.004]];
+  const curve = new THREE.SplineCurve(prof.map(([r, y]) => new THREE.Vector2(r, y)));
+  const g = new THREE.LatheGeometry(curve.getPoints(48), 16);
+  g.scale(1.2, 1, 0.6);
+  g.translate(0, 0, 0.07);
+  return g;
+}
+
+// ── Luz: melena con flequillo y moñito, ringer de Laagam, falda midi de cuadros ──
+const LUZ = {
+  head: { rect: [384, 100, 500, 265] },
+  hairBack: [428, 136, 452, 152],
+  bun: [425, 102, 462, 135],
+  neck: { A: [441, 255], B: [441, 292], w: 18 },
+  torso: { A: [441, 290], B: [441, 590], w: 92 },
+  torsoBack: { A: [441, 385], B: [441, 555], w: 80 },
+  upR: { A: [338, 300], B: [333, 470], w: 13 },
+  foreR: { A: [333, 470], B: [330, 555], w: 11 },
+  handR: { A: [331, 520], B: [331, 555], w: 8 },          // manos: piel lisa del antebrazo
+  upL: { A: [543, 300], B: [549, 470], w: 13 },
+  foreL: { A: [549, 470], B: [553, 555], w: 11 },
+  handL: { A: [552, 520], B: [552, 555], w: 8 },
+  thighR: { A: [410, 900], B: [411, 980], w: 14 },
+  thighL: { A: [410, 900], B: [411, 980], w: 14 },
+  shinR: { A: [410, 890], B: [413, 1048], w: 20 },
+  shinL: { A: [470, 890], B: [468, 1048], w: 20 },
+  shoeR: { rect: [380, 1052, 440, 1122] },
+  shoeL: { rect: [440, 1052, 500, 1122] },
+  skirt: { A: [442, 565], B: [442, 885], wA: 100, wB: 138 },
+  hem: { A: [442, 760], B: [442, 885], wA: 128, wB: 138 },
+};
+
+function makeLuz() {
+  const tex = dollTextures('assets/characters/luz.webp', {
+    head: LUZ.head.rect,
+    covers: [[298, 555, 54, 160, 54], [530, 555, 58, 160, -56]],
+  });
+  const mat = photoMat(tex.body);
+  const rig = photoBody(mat, LUZ, {
+    skin: '#f0c7b2', face: { brows: '#3a2418', lips: '#c4706c', iris: '#5a3a24', lashes: 6.5 },
+    torso: [0.16, 0.145], legs: [0.07, 0.046, 0.04, 0.03], arms: [0.034, 0.026, 0.025, 0.02],
+    shoe: [0.085, 0.2],
+  });
+  const { upper, head } = rig;
+  // camiseta ringer pintada, con mangas cortas y ribete oscuro
+  const tee = photoMat(ringerTex('#f0c7b2'));
+  rig.torso.geometry.dispose();
+  rig.torso.geometry = torsoGeo();
+  rig.torso.material = tee;
+  const sleeveMat = photoMat(null, { color: '#f6f1e8', emissive: new THREE.Color(0.35, 0.34, 0.32) });
+  const trim = lam('#3e2c28');
+  const sleeves = rig.armsList.map(A => {
+    const sl = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.05, 0.1, 10), sleeveMat);
+    const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.007, 6, 14), trim);
+    cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.05;
+    sl.add(cuff);
+    A.shoulder.material = sleeveMat;
+    rig.body.add(sl);
+    return { A, sl };
+  });
+  const sleeveEnd = V(0, 0, 0);
+  const twoSided = photoMat(mat.map, { side: THREE.DoubleSide });
+
+  // falda midi con vuelo: sentada cae por delante de las rodillas; de pie, de la cadera a media pierna
+  const hem = new THREE.Mesh(projectTube(new THREE.CylinderGeometry(0.17, 0.22, 0.16, 8, 1, true), LUZ.hem, null, -1), twoSided);
+  const fg = new THREE.CylinderGeometry(0.15, 0.25, 1, 10, 3, true);
+  const fp = fg.attributes.position;
+  for (let i = 0; i < fp.count; i++) {   // pliegues
+    const x = fp.getX(i), z = fp.getZ(i), y = fp.getY(i);
+    const a = Math.atan2(z, x), k = 1 + Math.sin(a * 5) * 0.06 * (0.5 - y);
+    fp.setXYZ(i, x * k, y, z * k);
+  }
+  projectTube(fg, LUZ.skirt, null, -1);
+  const flare = new THREE.Mesh(fg, twoSided);
+  const wg = new THREE.CylinderGeometry(0.13, 0.15, 0.08, 8);
+  projectTube(wg, { A: [442, 565], B: [442, 600], w: 100 }, null, -1);
+  const waist = new THREE.Mesh(wg, mat);
+  waist.position.set(0, 0.53, 0.04); waist.scale.z = 0.8;
+  upper.add(waist);
+  rig.body.add(hem, flare);
+
+  // el pelo de los muñecos de antes, agrandado a la cabeza nueva
+  // (todo en coordenadas de la cabeza antigua, centrado en el cráneo)
+  const hairMat = phong('#ffffff', { map: hairStrands('#a07a4c', 'rgba(222,190,140,1)', 'rgba(110,78,46,1)', 7), side: THREE.DoubleSide, shininess: 30 });
+  const hairs = new THREE.Group();
+  rig.skull.add(hairs);
+  // gorro de pelo: por detrás y por arriba, con raya en medio
+  for (const geo of [
+    new THREE.SphereGeometry(0.096, 16, 12, 0, Math.PI, 0, Math.PI * 0.75),
+    new THREE.SphereGeometry(0.096, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.3),
+  ]) {
+    const cap = new THREE.Mesh(shapeHead(geo), hairMat);
+    cap.position.set(0, 0.005, 0.006);
+    hairs.add(cap);
+  }
+  // melena larga detrás (lámina curva)
+  const hair = new THREE.Group();
+  hair.position.set(0, 0.02, 0.03);
+  const back = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.42, 14, 4, true, -Math.PI / 2 - 0.1, Math.PI + 0.2), hairMat);
+  back.position.set(0, -0.2, 0.02);
+  back.scale.z = 0.75;
+  hair.add(back);
+  hairs.add(hair);
+  // mechones delante de los hombros, enmarcando la cara
+  for (const sx of [-1, 1]) {
+    const lock = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.32, 8, 3, true, 0, Math.PI * 2), hairMat);
+    lock.position.set(sx * 0.085, -0.16, -0.01);
+    lock.rotation.z = sx * 0.12;
+    lock.scale.z = 0.5;
+    hairs.add(lock);
+  }
+  // flequillo cortina, abierto en medio
+  for (const sx of [-1, 1]) {
+    const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8, Math.PI * 1.5 - (sx < 0 ? 0.95 : -0.05), 0.9, Math.PI * 0.2, Math.PI * 0.2), hairMat);
+    fringe.position.set(0, 0.005, 0.004);
+    fringe.scale.set(0.95, 1.12, 1.0);
+    hairs.add(fringe);
+  }
+  // moñito arriba
+  const bun = new THREE.Mesh(new THREE.IcosahedronGeometry(0.03, 1), hairMat);
+  bun.position.set(0, 0.115, 0.03);
+  hairs.add(bun);
+
+  const pose = rig.pose;
+  rig.pose = (o) => {
+    pose(o);
+    for (const { A, sl } of sleeves) {
+      sleeveEnd.copy(A.shoulder.position).lerp(A.elbow.position, 0.42);
+      place(sl, sleeveEnd, A.shoulder.position);
+    }
+    const b = o.b;
+    hem.visible = b < 0.5;
+    hem.position.set(0, 0.36 + 0.26 * b, -0.33 + 0.27 * b);
+    flare.visible = b >= 0.5;
+    const len = 0.3 + 0.16 * smooth((b - 0.5) * 2);
+    flare.scale.set(1, len, 0.85);
+    flare.position.set(0, 0.88 + 0.02 - len / 2, 0.03);
+    flare.rotation.z = Math.sin((o.t || 0) * 1.3) * 0.03;
+  };
+
+  return { ...rig, hair, lookBias: 0.35 };
 }
 
 export function createCharacters({ sparkles } = {}) {
