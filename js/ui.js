@@ -120,7 +120,7 @@ export function initUI({ audio, world }) {
   }
 
   world.onHover(p => {
-    if (p && p.type === 'char' && state === 'menu') selectChar(CHARS.indexOf(p.id));
+    if (state === 'menu') selectChar(p && p.type === 'char' ? CHARS.indexOf(p.id) : -1, !!p);
     if (state === 'char') {
       if (p && p.type === 'option') selectOption(optKeys.indexOf(p.id));
       else { optIndex = -1; world.highlightOption(null); world.setFocus(null); }
