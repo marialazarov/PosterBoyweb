@@ -50,7 +50,7 @@ export function initUI({ audio, world }) {
   const charBack = document.getElementById('char-back');
 
   let state = 'intro';
-  let charIndex = 0;
+  let charIndex = -1;      // -1: ninguna marcada hasta pasar el cursor (o usar las flechas)
   let chosen = null;
   let optKeys = [];        // opciones de la elegida, cuando ya han salido
   let optIndex = -1;
@@ -61,18 +61,18 @@ export function initUI({ audio, world }) {
   audio.start();
 
   function selectChar(i, sound = true) {
-    const next = (i + CHARS.length) % CHARS.length;
-    if (next !== charIndex && sound) audio.blip('move');
+    const next = i < 0 ? -1 : (i + CHARS.length) % CHARS.length;
+    if (next !== charIndex && next >= 0 && sound) audio.blip('move');
     charIndex = next;
     charBtns.forEach((b, j) => b.classList.toggle('is-active', j === charIndex));
-    world.highlightChar(CHARS[charIndex]);
+    world.highlightChar(charIndex >= 0 ? CHARS[charIndex] : null);
   }
 
   function start() {
     if (state !== 'intro') return;
     audio.start();
     setState('menu');
-    selectChar(0, false);
+    selectChar(-1, false);
   }
 
   function choose(name) {
@@ -94,7 +94,7 @@ export function initUI({ audio, world }) {
     world.setFocus(null);
     world.chooseChar(null);
     setState('menu');
-    selectChar(charIndex, false);
+    selectChar(-1, false);
   }
 
   world.onArrive((name, keys) => {
@@ -167,9 +167,9 @@ export function initUI({ audio, world }) {
     const back = k === 'escape' || k === 'backspace';
 
     if (state === 'menu') {
-      if (prev) { e.preventDefault(); selectChar(charIndex - 1); }
-      if (next) { e.preventDefault(); selectChar(charIndex + 1); }
-      if (ok)   { e.preventDefault(); choose(CHARS[charIndex]); }
+      if (prev) { e.preventDefault(); selectChar(charIndex < 0 ? CHARS.length - 1 : charIndex - 1); }
+      if (next) { e.preventDefault(); selectChar(charIndex < 0 ? 0 : charIndex + 1); }
+      if (ok && charIndex >= 0) { e.preventDefault(); choose(CHARS[charIndex]); }
     } else if (state === 'char') {
       if (prev) { e.preventDefault(); selectOption(optIndex < 0 ? 0 : optIndex - 1); }
       if (next) { e.preventDefault(); selectOption(optIndex < 0 ? 0 : optIndex + 1); }
@@ -184,6 +184,7 @@ export function initUI({ audio, world }) {
 
   charBtns.forEach((b, j) => {
     b.addEventListener('pointerenter', () => { if (state === 'menu') selectChar(j); });
+    b.addEventListener('pointerleave', () => { if (state === 'menu' && charIndex === j) selectChar(-1, false); });
     b.addEventListener('click', () => { selectChar(j, false); choose(CHARS[j]); });
   });
   charBack.addEventListener('click', unchoose);

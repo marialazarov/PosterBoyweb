@@ -5,6 +5,7 @@
   --ink-soft: rgba(255, 244, 236, 0.6);
   --warm: #ffc483;
   --lilac: #cbb2ff;
+  --pick: #ffe14d;                      /* color de la opción elegida (amarillo; rosa: #ff8fc8) */
   --night: #1c1230;
   /* Futura, la del logo (viene en Mac e iPhone). Donde no está, Jost, su gemela libre. */
   --font: "Futura", "Futura PT", "Jost", system-ui, sans-serif;
@@ -102,17 +103,22 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .menu__title {
   text-align: center;
-  font-size: clamp(15px, 1.4vw, 19px);
+  font-size: clamp(18px, 1.75vw, 24px);
   letter-spacing: .32em;
-  color: rgba(255, 251, 240, .7);
-  text-shadow: var(--lift);
+  text-transform: uppercase;
+  color: var(--ink);
+  text-shadow: var(--lift), 0 0 10px rgba(255, 240, 210, .7), 0 0 26px rgba(255, 196, 131, .55);
+  animation: shine 2.6s ease-in-out infinite;
   margin-bottom: .7em;
+}
+@keyframes shine {                 /* brillo que late despacio */
+  50% { text-shadow: var(--lift), 0 0 14px rgba(255, 248, 225, .95), 0 0 38px rgba(255, 196, 131, .85); }
 }
 .menu ul { list-style: none; display: flex; justify-content: center; gap: clamp(28px, 6vw, 110px); }
 
 .menu button {
   position: relative;
-  padding: .15em 1.4em;
+  padding: .15em .6em;
   font-size: clamp(24px, 2.6vw, 36px);
   letter-spacing: .04em;
   line-height: 1.2;
@@ -121,28 +127,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   outline: none;
   transition: color .3s, transform .4s var(--ease), text-shadow .3s;
 }
-.menu button::before,
-.menu button::after {            /* cursor ✦ a los dos lados */
-  content: "✦";
-  position: absolute;
-  left: 0; top: 50%;
-  translate: 0 -50%;
-  font-size: .5em;
-  color: var(--ink);
-  opacity: 0;
-  transition: opacity .2s;
-  animation: spin 3.5s linear infinite;
-}
-.menu button::after { left: auto; right: 0; }
-@keyframes spin { to { rotate: 360deg; } }
-
 .menu button.is-active {
-  color: var(--ink);
+  color: var(--pick);
   transform: scale(1.04);
-  text-shadow: var(--lift), 0 0 24px rgba(255, 210, 170, .45);
+  text-shadow: var(--lift), 0 0 24px color-mix(in srgb, var(--pick) 45%, transparent);
 }
-.menu button.is-active::before,
-.menu button.is-active::after { opacity: 1; }
 
 /* ── Estados ───────────────────────────────────────────────────── */
 
