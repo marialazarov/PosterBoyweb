@@ -1,7 +1,7 @@
 // Luz y María: sentadas de espaldas mirando el mar. Al elegir una, se levanta,
 // sale de la silla, se gira hacia la cámara y saluda.
 // Estilo PS1 «trashy»: cuerpos de pocos polígonos con su foto de cuerpo entero
-// pegada encima (proyectada de frente), píxeles gordos y sombreado facetado.
+// pegada encima (proyectada de frente), sin el fondo gris, y sombreado facetado.
 // La espalda es inventada: se rellena con trozos de pelo y ropa de la misma foto.
 import * as THREE from 'three';
 import { glowSprite, rand, canvasTexture } from './util.js';
@@ -20,37 +20,23 @@ const DURATION = 2.6;         // segundos de levantarse → girarse → venir
 const SEG = 7;                // lados de cada tubo del cuerpo (pocos = más PS1)
 
 // ── La foto ──────────────────────────────────────────────────────
-// Las zonas de cada parte se miden en píxeles de la foto original (864×1184);
-// la textura es la foto a mitad de tamaño, con píxeles sin suavizar.
+// Las zonas de cada parte se miden en píxeles de la foto (864×1184). La foto
+// viene ya sin fondo: el gris se ha rellenado con el color de al lado.
 const IMG = { w: 864, h: 1184 };
 
-// La foto es solo el boceto: de ella salen los colores y los estampados,
-// pero simplificados (pocos píxeles, pocos colores), como una textura pintada
-// de videojuego. La cara se dibuja encima, de muñeco.
 const canvas2d = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
 function pixelTex(canvas) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;                  // suave, sin píxeles gordos
+  tex.anisotropy = 4;
   return tex;
 }
-// reduce la foto con suavizado
-function shrink(src, sx, sy, sw, sh, w, h) {
-  const c = canvas2d(w, h), g = c.getContext('2d');
-  g.imageSmoothingQuality = 'high';
-  g.filter = 'blur(1px)';               // quita el detalle de foto (poros, arrugas)
-  g.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
-  g.filter = 'none';
-  return c;
-}
-
 /**
- * Texturas de una chica: cuerpo (foto simplificada) y cabeza (pelo de la foto
- * pixelado + cara de muñeco pintada). cfg.covers tapa las manos de la foto
- * con trozos de ropa de al lado: [x, y, w, h, dx] (copia desde x+dx).
+ * Textura del cuerpo: la foto a tamaño completo (tatuajes nítidos). cfg.covers
+ * tapa las manos de la foto con trozos de ropa de al lado: [x, y, w, h, dx].
  */
 function dollTextures(url, cfg) {
-  const bodyC = canvas2d(432, 592);
+  const bodyC = canvas2d(IMG.w, IMG.h);
   const body = pixelTex(bodyC);
   const img = new Image();
   img.onload = () => {
@@ -58,7 +44,7 @@ function dollTextures(url, cfg) {
     const full = canvas2d(IMG.w, IMG.h), fg = full.getContext('2d');
     fg.drawImage(img, 0, 0, IMG.w, IMG.h);
     for (const [x, y, w, h, dx] of cfg.covers || []) fg.drawImage(full, x + dx, y, w, h, x, y, w, h);
-    bodyC.getContext('2d').drawImage(shrink(full, 0, 0, IMG.w, IMG.h, 432, 592), 0, 0);
+    bodyC.getContext('2d').drawImage(full, 0, 0);
     body.needsUpdate = true;
   };
   img.src = url;
@@ -511,10 +497,10 @@ const LUZ = {
   neck: { A: [441, 255], B: [441, 292], w: 18 },
   torso: { A: [441, 290], B: [441, 590], w: 92 },
   torsoBack: { A: [441, 385], B: [441, 555], w: 80 },
-  upR: { A: [338, 300], B: [333, 470], w: 13 },
+  upR: { A: [336, 372], B: [333, 470], w: 13 },          // solo la piel, bajo la manga
   foreR: { A: [333, 470], B: [330, 555], w: 11 },
   handR: { A: [331, 520], B: [331, 555], w: 8 },          // manos: piel lisa del antebrazo
-  upL: { A: [543, 300], B: [549, 470], w: 13 },
+  upL: { A: [546, 372], B: [549, 470], w: 13 },
   foreL: { A: [549, 470], B: [553, 555], w: 11 },
   handL: { A: [552, 520], B: [552, 555], w: 8 },
   thighR: { A: [410, 900], B: [411, 980], w: 14 },
