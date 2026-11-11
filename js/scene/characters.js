@@ -43,12 +43,31 @@ function dollTextures(url, cfg) {
     // foto de trabajo a tamaño original, con las manos tapadas
     const full = canvas2d(IMG.w, IMG.h), fg = full.getContext('2d');
     fg.drawImage(img, 0, 0, IMG.w, IMG.h);
-    for (const [x, y, w, h, dx] of cfg.covers || []) fg.drawImage(full, x + dx, y, w, h, x, y, w, h);
+    for (const [x, y, w, h, dx, dy = 0] of cfg.covers || []) fg.drawImage(full, x + dx, y + dy, w, h, x, y, w, h);
+    if (cfg.paint) cfg.paint(fg);
+    // tono de la piel de los brazos (mediana), para pintar la cara igual
+    if (cfg.skinAt) {
+      const [x, y, w, h] = cfg.skinAt, d = fg.getImageData(x, y, w, h).data;
+      const ch = k => { const v = []; for (let i = k; i < d.length; i += 4) v.push(d[i]); v.sort((a, b) => a - b); return v[v.length >> 1] / 255; };
+      out.onSkin?.(new THREE.Color().setRGB(ch(0), ch(1), ch(2), THREE.SRGBColorSpace));
+    }
     bodyC.getContext('2d').drawImage(full, 0, 0);
     body.needsUpdate = true;
   };
   img.src = url;
-  return { body };
+  const out = { body, onSkin: null };
+  return out;
+}
+
+// copia un trozo de la foto encima de otro con los bordes difuminados (para borrar cosas)
+function softCopy(g, x, y, w, h, dx, dy) {
+  const t = canvas2d(w, h), tg = t.getContext('2d');
+  tg.drawImage(g.canvas, x + dx, y + dy, w, h, 0, 0, w, h);
+  tg.globalCompositeOperation = 'destination-in';
+  const gr = tg.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.25, w / 2, h / 2, Math.max(w, h) * 0.55);
+  gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  tg.fillStyle = gr; tg.fillRect(0, 0, w, h);
+  g.drawImage(t, x, y);
 }
 
 // ── Cara de muñeco pintada sobre una cabeza redonda de verdad ──
@@ -122,8 +141,10 @@ function faceTexture({ brows, lips, iris, lashes }) {
 }
 
 // la foto ya trae su luz: brilla un poco por sí misma para no apagarse al atardecer
+const PHOTO_GLOW = new THREE.Color(0.62, 0.58, 0.56);
+const ARM_LIGHT = 1.2;          // cuánto más clara va la piel de los brazos que la foto
 const photoMat = (map, extra = {}) => new THREE.MeshLambertMaterial({
-  map, emissiveMap: map, emissive: new THREE.Color(0.62, 0.58, 0.56), flatShading: true, ...extra,
+  map, emissiveMap: map, emissive: PHOTO_GLOW, flatShading: true, ...extra,
 });
 
 // punto de la foto a lo largo de una zona A→B: t 0..1 (de A a B), s -1..1
@@ -215,7 +236,8 @@ function bone(rA, rB, len, mat, spec, back, seg = SEG) {
   m.userData.len = len;
   return m;
 }
-const joint = (r, mat, rect) => new THREE.Mesh(projectRect(new THREE.IcosahedronGeometry(r, 0), rect), mat);
+const joint = (r, mat, rect, detail = 0) => new THREE.Mesh(projectRect(new THREE.IcosahedronGeometry(r, detail), rect), mat);
+
 const around = ([x, y], w, h = w) => [x - w, y - h, x + w, y + h];
 
 /**
@@ -223,6 +245,11 @@ const around = ([x, y], w, h = w) => [x - w, y - h, x + w, y + h];
  * S: zonas de la foto · o: medidas propias de cada una
  */
 function photoBody(mat, S, o) {
+  // piel de brazos, manos y cuello: la misma foto, un poco más clara
+  const skinMat = mat.clone();
+  skinMat.flatShading = false;           // la piel, suave
+  skinMat.color.setScalar(ARM_LIGHT);
+  skinMat.emissive.multiplyScalar(ARM_LIGHT);
   const body = new THREE.Group();     // en el suelo
   const upper = new THREE.Group();    // tronco, cuello y cabeza: sube al levantarse
   body.add(upper);
@@ -235,23 +262,22 @@ function photoBody(mat, S, o) {
   const torso = new THREE.Mesh(tg, mat);
   upper.add(torso);
 
-  const neck = bone(0.045, 0.04, 0.09, mat, S.neck, null, 6);
+  const neck = bone(0.045, 0.04, 0.09, skinMat, S.neck, null, 6);
   place(neck, V(0, 0.98, 0.08), V(0, 1.08, 0.075));
   upper.add(neck);
 
   // cabeza redonda de tamaño natural, piel lisa y cara de muñeco pintada
   const head = new THREE.Group();
   head.position.set(0, 1.06, 0.07);
-  const glow = new THREE.Color(0.26, 0.24, 0.24);
-  const skin = new THREE.MeshPhongMaterial({ color: o.skin, shininess: 14, specular: 0x2a1c18,
-    emissive: new THREE.Color(o.skin).multiply(glow) });
+  // misma luz que el cuerpo de la foto, para que la cara tenga el tono de los brazos
+  const skin = new THREE.MeshLambertMaterial();
   const skull = new THREE.Mesh(shapeHead(new THREE.SphereGeometry(0.088, 24, 18)), skin);
   skull.position.y = 0.1;
   const faceMap = faceTexture(o.face);
   skull.add(new THREE.Mesh(
     shapeHead(new THREE.SphereGeometry(0.0886, 40, 28, FACE.phi0, FACE.phiLen, FACE.th0, FACE.thLen)),
-    new THREE.MeshPhongMaterial({ map: faceMap, emissiveMap: faceMap, emissive: glow, transparent: true,
-      depthWrite: false, shininess: 14, specular: 0x2a1c18 })));
+    new THREE.MeshLambertMaterial({ map: faceMap, emissiveMap: faceMap, emissive: PHOTO_GLOW, transparent: true,
+      depthWrite: false })));
   // naricita y orejas
   const nose = new THREE.Mesh(new THREE.SphereGeometry(0.009, 10, 8), skin);
   nose.scale.set(0.8, 1.5, 0.7); nose.position.set(0, -0.016, -0.085);
@@ -280,13 +306,15 @@ function photoBody(mat, S, o) {
   const A = o.arms;
   const armsList = [1, -1].map(sx => {
     const k = sx > 0 ? 'R' : 'L';
-    const up = bone(A[0], A[1], 0.26, mat, S['up' + k]);
-    const fore = bone(A[2], A[3], 0.235, mat, S['fore' + k]);
-    const elbow = joint(A[1] * 1.05, mat, around(S['up' + k].B, S['up' + k].w * 0.6));
-    const hand = bone(0.03, 0.026, 0.085, mat, S['hand' + k], null, 5);
-    // hombro: un poco más abajo del borde de la foto, para no coger fondo gris
+    // brazos redondos (más lados) para que no parezcan de madera
+    const up = bone(A[0], A[1], 0.26, skinMat, S['up' + k], null, 12);
+    const fore = bone(A[2], A[3], 0.235, skinMat, S['fore' + k], null, 12);
+    const elbow = joint(A[1] * 1.02, skinMat, around(S['up' + k].B, S['up' + k].w * 0.6), 2);
+    const hand = bone(0.03, 0.026, 0.085, skinMat, S['hand' + k], null, 5);
+    // hombro: redondo y metido en el tronco, con piel de un poco más abajo del borde
     const [sxp, syp] = S['up' + k].A;
-    const shoulder = joint(A[0] * 1.15, mat, around([sxp + sx * 4, syp + 22], S['up' + k].w * 0.55));
+    const shoulder = joint(A[0] * 1.08, skinMat, around([sxp + sx * 4, syp + 22], S['up' + k].w * 0.55), 2);
+    shoulder.scale.set(0.95, 1.1, 0.95);
     body.add(up, fore, elbow, hand, shoulder);
     return { sx, up, fore, elbow, hand, shoulder };
   });
@@ -333,14 +361,23 @@ function photoBody(mat, S, o) {
       place(Ar.up, P.sh, P.el);
       place(Ar.fore, P.el, P.hand);
       Ar.elbow.position.copy(P.el);
-      Ar.shoulder.position.copy(P.sh).add(tmp.set(-sx * 0.012, -0.01, 0));
+      Ar.shoulder.position.copy(P.sh).add(tmp.set(-sx * 0.02, -0.012, 0));
       // mano: sigue la dirección del antebrazo
       dir.subVectors(P.hand, P.el).normalize();
       place(Ar.hand, P.hand, tmp.copy(P.hand).addScaledVector(dir, 0.085));
     }
   }
 
-  return { body, upper, torso, head, skull, legs, armsList, pose };
+  // la foto se convierte de sRGB al usarla como textura: el color de piel sacado
+  // de ella pasa por lo mismo (a medias, para que la cara quede un poco más
+  // clara que los brazos), y lleva la misma luz que el cuerpo
+  const FACE_LIGHT = 0.35;     // 0 = tono exacto de los brazos · 1 = muy clara
+  const setSkin = c => {
+    skin.color.copy(c).convertSRGBToLinear().lerp(c, FACE_LIGHT);
+    skin.emissive.copy(skin.color).multiply(PHOTO_GLOW);
+  };
+  setSkin(new THREE.Color(o.skin));
+  return { body, upper, torso, head, skull, legs, armsList, pose, setSkin };
 }
 
 // ── Pelo de los muñecos de antes ──
@@ -381,7 +418,7 @@ const MARIA = {
   torsoBack: { A: [432, 360], B: [432, 600], w: 70 },
   upR: { A: [337, 300], B: [318, 495], w: 18 },
   foreR: { A: [318, 495], B: [312, 590], w: 12 },
-  handR: { A: [314, 555], B: [313, 590], w: 8 },          // manos: piel lisa del antebrazo
+  handR: { A: [314, 528], B: [313, 560], w: 8 },          // manos: piel lisa, sin la mancha de la muñeca
   upL: { A: [527, 300], B: [545, 495], w: 18 },
   foreL: { A: [545, 495], B: [550, 590], w: 12 },
   handL: { A: [549, 555], B: [550, 590], w: 8 },
@@ -398,6 +435,22 @@ function makeMaria() {
     head: MARIA.head.rect,
     // tapa las manos de la foto (que no salgan pintadas en el pantalón)
     covers: [[286, 590, 50, 130, 52], [526, 590, 52, 130, -52]],
+    skinAt: [309, 525, 9, 25],
+    paint: g => {
+      softCopy(g, 312, 490, 26, 30, 0, 22);   // fuera el corazón del antebrazo (piel de justo debajo)
+      // tatuaje: mancha suave arriba de la muñeca derecha (punteado, no muy oscuro)
+      const R = rand(9), cx = 314, cy = 578;
+      const gr = g.createRadialGradient(cx, cy, 1, cx, cy, 12);
+      gr.addColorStop(0, 'rgba(58,60,72,.38)'); gr.addColorStop(0.6, 'rgba(58,60,72,.2)'); gr.addColorStop(1, 'rgba(58,60,72,0)');
+      g.save(); g.translate(cx, cy); g.scale(1, 0.7); g.translate(-cx, -cy);
+      g.fillStyle = gr; g.fillRect(cx - 13, cy - 13, 26, 26);
+      g.restore();
+      g.fillStyle = 'rgba(50,52,62,.35)';
+      for (let i = 0; i < 60; i++) {
+        const a = R() * Math.PI * 2, r = Math.pow(R(), 0.7) * 9.5;
+        g.fillRect(cx + Math.cos(a) * r - 0.5, cy + Math.sin(a) * r * 0.7 - 0.5, 1, 1);
+      }
+    },
   });
   const mat = photoMat(tex.body);
   const rig = photoBody(mat, MARIA, {
@@ -405,6 +458,7 @@ function makeMaria() {
     torso: [0.16, 0.155], legs: [0.115, 0.105, 0.105, 0.125], arms: [0.04, 0.032, 0.03, 0.024],
     shoe: [0.1, 0.22], armsCrossed: true,
   });
+  tex.onSkin = rig.setSkin;
   // cintura del pantalón
   const wg = new THREE.CylinderGeometry(0.15, 0.16, 0.1, 8);
   projectTube(wg, { A: [432, 590], B: [432, 625], w: 92 }, null, -1);
@@ -497,10 +551,10 @@ const LUZ = {
   neck: { A: [441, 255], B: [441, 292], w: 18 },
   torso: { A: [441, 290], B: [441, 590], w: 92 },
   torsoBack: { A: [441, 385], B: [441, 555], w: 80 },
-  upR: { A: [336, 372], B: [333, 470], w: 13 },          // solo la piel, bajo la manga
+  upR: { A: [335, 412], B: [333, 470], w: 13 },          // solo la piel, bajo la manga
   foreR: { A: [333, 470], B: [330, 555], w: 11 },
   handR: { A: [331, 520], B: [331, 555], w: 8 },          // manos: piel lisa del antebrazo
-  upL: { A: [546, 372], B: [549, 470], w: 13 },
+  upL: { A: [547, 412], B: [549, 470], w: 13 },
   foreL: { A: [549, 470], B: [553, 555], w: 11 },
   handL: { A: [552, 520], B: [552, 555], w: 8 },
   thighR: { A: [410, 900], B: [411, 980], w: 14 },
@@ -517,6 +571,7 @@ function makeLuz() {
   const tex = dollTextures('assets/characters/luz.webp', {
     head: LUZ.head.rect,
     covers: [[298, 555, 54, 160, 54], [530, 555, 58, 160, -56]],
+    skinAt: [327, 485, 7, 30],
   });
   const mat = photoMat(tex.body);
   const rig = photoBody(mat, LUZ, {
@@ -524,17 +579,18 @@ function makeLuz() {
     torso: [0.16, 0.145], legs: [0.07, 0.046, 0.04, 0.03], arms: [0.034, 0.026, 0.025, 0.02],
     shoe: [0.085, 0.2],
   });
+  tex.onSkin = rig.setSkin;
   const { upper, head } = rig;
   // camiseta ringer pintada, con mangas cortas y ribete oscuro
   const tee = photoMat(ringerTex('#f0c7b2'));
   rig.torso.geometry.dispose();
   rig.torso.geometry = torsoGeo();
   rig.torso.material = tee;
-  const sleeveMat = photoMat(null, { color: '#f6f1e8', emissive: new THREE.Color(0.35, 0.34, 0.32) });
-  const trim = lam('#3e2c28');
+  const sleeveMat = new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: new THREE.Color(0.55, 0.55, 0.55) });
+  const trim = lam('#111111');
   const sleeves = rig.armsList.map(A => {
     const sl = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.05, 0.1, 10), sleeveMat);
-    const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.007, 6, 14), trim);
+    const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.0028, 4, 16), trim);   // bordecito negro
     cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.05;
     sl.add(cuff);
     A.shoulder.material = sleeveMat;
