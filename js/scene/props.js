@@ -117,7 +117,7 @@ export function createProps() {
   // sillas
   for (const x of [CHAIR_X.maria, CHAIR_X.luz]) {
     const c = makeChair();
-    c.scale.setScalar(0.88);
+    c.scale.setScalar(0.94);
     const y = groundHeight(x, CHAIR_Z);
     c.position.set(x, y, CHAIR_Z);
     c.rotation.y = x < 0 ? 0.08 : -0.08;

@@ -15,7 +15,7 @@ const smooth = x => { x = clamp01(x); return x * x * (3 - 2 * x); };
 
 const SKIN = '#efc8b0';
 const LIFT = 0.36;            // cuánto sube la cadera al ponerse de pie
-const DROP = 0.06;            // sentada, un poco más abajo (sillas más bajitas)
+const DROP = 0.03;            // sentada, un poco más abajo (sillas más bajitas)
 const DURATION = 2.6;         // segundos de levantarse → girarse → venir
 
 // ── Texturas pintadas ────────────────────────────────────────────
@@ -631,7 +631,7 @@ export function createCharacters({ sparkles } = {}) {
     p.waveSide = out < 0 ? 1 : -1;                 // saluda con el brazo de fuera
     p.s = 0; p.target = 0; p.hl = 0; p.waveT = 0; p.arrived = false;
     p.body.position.set(p.x, groundHeight(p.x, CHAIR_Z), CHAIR_Z);
-    p.body.scale.setScalar(0.86);   // tamaño de persona junto a las sillas
+    p.body.scale.setScalar(0.93);   // tamaño de persona junto a las sillas
     p.body.rotation.y = p.home.rot;
     group.add(p.body);
 
